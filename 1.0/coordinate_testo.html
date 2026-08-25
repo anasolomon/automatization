@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Calcolatore Coordinate — versione vanilla JS</title>
+<style>
+  :root { --bg:#0d2b33; --panel:#0a1f26; --border:#235057; --accent:#ffb37a; --dim:#7fb8bd; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:#eaf3f3; font-family:system-ui,sans-serif;
+         display:flex; flex-wrap:wrap; gap:28px; padding:24px; justify-content:center; }
+  .screenWrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .screenLabel { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); }
+  #screen { position:relative; width:384px; height:683px; background:var(--panel);
+            border:3px solid #1e4a52; border-radius:14px; overflow:hidden;
+            box-shadow:0 20px 50px rgba(0,0,0,0.45); }
+  #dragText { position:absolute; display:flex; align-items:center; justify-content:center;
+              color:#fff; font-family:monospace; white-space:nowrap; overflow:hidden;
+              cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:border-box; }
+  #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
+  #dot { position:absolute; width:8px; height:8px; border-radius:50%; background:var(--accent);
+         box-shadow:0 0 0 3px rgba(255,179,122,0.25); }
+  .panel { width:340px; display:flex; flex-direction:column; gap:16px; }
+  h1 { font-size:22px; font-weight:700; margin:0; }
+  .sub { font-size:13px; color:#9cc9cd; margin-top:4px; }
+  label.field { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--dim); }
+  input[type=text], select { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+         padding:8px 10px; color:#fff; font-size:14px; }
+  .checkboxRow { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+  .colorRow { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--dim); }
+  .tooltip { position:absolute; top:calc(100% + 8px); left:0; width:300px; z-index:10;
+         background:#123840; border:1px solid #2d6069; border-radius:8px; padding:10px 12px;
+         font-size:12.5px; line-height:1.5; color:#eaf3f3; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+         display:none; }
+  button.reset { background:#1e4a52; border:1px solid #2d6069; border-radius:8px; padding:9px 12px;
+         color:#eaf3f3; font-size:13px; cursor:pointer; }
+  .readout { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px;
+         display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:13px; }
+  .readout .row { display:flex; justify-content:space-between; }
+  .readout .row span:first-child { color:var(--dim); }
+  .readout .val { color:var(--accent); font-weight:700; }
+  .divider { height:1px; background:var(--border); margin:4px 0; }
+  .lines { background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .lineRow { display:flex; align-items:center; justify-content:space-between; padding:8px 14px;
+         font-family:monospace; font-size:12.5px; cursor:pointer; border-top:1px solid #16333a; }
+  .lineRow:first-child { border-top:none; }
+  .lineRow:hover { background:#123840; }
+  .copyHint { font-size:11px; color:var(--dim); opacity:0; transition:opacity .1s; }
+  .lineRow:hover .copyHint { opacity:1; }
+  button.copyAll { background:var(--accent); border:none; border-radius:8px; padding:10px 12px;
+         color:#0a1f26; font-weight:700; font-size:13px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+  <div class="screenWrap">
+    <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
+    <div id="screen">
+      <div id="dragText">Christopher</div>
+      <div id="dot"></div>
+    </div>
+    <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h1>Posiziona testo Techla (vanilla)</h1>
+      <div class="sub">Stessa logica della versione React, scritta a mano.</div>
+    </div>
+
+    <label class="field">
+      <span>Testo</span>
+      <input type="text" id="textInput" value="Christopher">
+    </label>
+
+    <label class="field">
+      <span>Dimensione (famiglia font)</span>
+      <select id="fontSelect"></select>
+    </label>
+
+    <label class="checkboxRow"><input type="checkbox" id="transparentCk"> Trasparente (non spuntato = coprente)</label>
+    <label class="checkboxRow"><input type="checkbox" id="boldCk"> Bold</label>
+
+    <div style="position:relative;display:flex;gap:16px;">
+      <label class="checkboxRow" id="nonPermLabel">
+        <input type="checkbox" id="nonPermCk" checked> Non permanente
+      </label>
+      <label class="checkboxRow" id="permLabel">
+        <input type="checkbox" id="permCk"> Permanente
+      </label>
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <label class="colorRow" id="colorRow">
+      <span>Colore paper (sfondo dietro al testo)</span>
+      <input type="color" id="paperColor" value="#0d2b6b">
+    </label>
+
+    <button class="reset" id="resetBtn">Reset — ricentra orizzontalmente e verticalmente</button>
+
+    <div class="readout">
+      <div class="row"><span>font</span><span class="val" id="outFont">-</span></div>
+      <div class="row"><span>gcursor X</span><span class="val" id="outX">-</span></div>
+      <div class="row"><span>gcursor Y</span><span class="val" id="outY">-</span></div>
+      <div class="divider"></div>
+      <div class="row"><span>larghezza testo (px)</span><span id="outW">-</span></div>
+      <div class="row"><span>altezza testo (px)</span><span id="outH">-</span></div>
+    </div>
+
+    <div class="lines" id="lines"></div>
+
+    <button class="copyAll" id="copyAllBtn">Copia il codice PLC</button>
+  </div>
+
+<script>
+// ============================================================
+// Stato: in React era useState(...). Qui sono solo variabili JS
+// normali — nessuna differenza di fondo, cambia solo CHI si
+// occupa di "ridisegnare" quando cambiano.
+// ============================================================
+const SCREEN_W = 768, SCREEN_H = 1366;
+const SCALE = 384 / SCREEN_W; // stessa idea dello "scale" in App.jsx, qui fisso per semplicità
+
+const FAMILIES = [
+  { base:5,  w:8,   h:13  },
+  { base:0,  w:12,  h:16  },
+  { base:53, w:16,  h:24  },
+  { base:13, w:24,  h:32  },
+  { base:69, w:32,  h:48  },
+  { base:17, w:36,  h:48  },
+  { base:21, w:48,  h:64  },
+  { base:33, w:60,  h:80  },
+  { base:41, w:84,  h:112 },
+].sort((a,b) => a.w*a.h - b.w*b.h);
+
+let state = {
+  text: "Christopher",
+  familyBase: 13,
+  transparent: false,
+  permanent: false,
+  bold: false,
+  pos: { x: 200, y: 650 },
+  paperColor: "#0d2b6b",
+};
+let dragging = false;
+let dragOffset = { dx:0, dy:0 };
+let copiedLineKey = null;
+
+const el = id => document.getElementById(id);
+const family = () => FAMILIES.find(f => f.base === state.familyBase);
+const fontId = () => family().base + (state.transparent ? 2 : 0) + (state.permanent ? 1 : 0) + (state.bold ? 100 : 0);
+const textSize = () => {
+  const f = family();
+  const chars = state.text.length || 1;
+  return { w: f.w * chars, h: f.h };
+};
+const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
+
+// ============================================================
+// LA PARTE CHE IN REACT ERA "GRATIS": qui la scriviamo a mano.
+// Ogni volta che qualcosa cambia, richiamiamo NOI stessi render()
+// per tenere tutta la UI sincronizzata con lo stato.
+// ============================================================
+function render() {
+  const f = family();
+  const ts = textSize();
+
+  // --- popola il dropdown (fatto una volta sola, vedi init) ---
+
+  // --- testo trascinabile ---
+  const dragEl = el('dragText');
+  dragEl.textContent = state.text || ' ';
+  dragEl.style.left = (state.pos.x * SCALE) + 'px';
+  dragEl.style.top = (state.pos.y * SCALE) + 'px';
+  dragEl.style.width = (ts.w * SCALE) + 'px';
+  dragEl.style.height = (ts.h * SCALE) + 'px';
+  dragEl.style.background = state.transparent ? 'transparent' : state.paperColor;
+  dragEl.style.fontWeight = state.bold ? '700' : '400';
+  dragEl.style.fontSize = (f.h * SCALE * 0.65) + 'px';
+  dragEl.classList.toggle('dragging', dragging);
+
+  // --- puntino del gcursor ---
+  el('dot').style.left = (state.pos.x * SCALE - 4) + 'px';
+  el('dot').style.top = (state.pos.y * SCALE - 4) + 'px';
+
+  // --- QUESTO è il punto che in React era "automatico":
+  //     mostra/nascondi il selettore colore in base a "transparent".
+  //     Qui dobbiamo ricordarci NOI di farlo, ogni volta. ---
+  el('colorRow').style.visibility = state.transparent ? 'hidden' : 'visible';
+
+  // --- riquadro numeri ---
+  el('outFont').textContent = fontId();
+  el('outX').textContent = state.pos.x;
+  el('outY').textContent = state.pos.y;
+  el('outW').textContent = ts.w;
+  el('outH').textContent = ts.h;
+
+  // --- le 3 righe di codice copiabili ---
+  const lines = [
+    { key:'font',    text:`font ${fontId()}` },
+    { key:'gcursor', text:`gcursor ${state.pos.x},${state.pos.y}` },
+    { key:'print',   text:`print "${state.text}"` },
+  ];
+  el('lines').innerHTML = lines.map(l => `
+    <div class="lineRow" data-key="${l.key}" data-text="${l.text.replace(/"/g,'&quot;')}">
+      <span style="color:${copiedLineKey===l.key ? '#8de3a0' : '#eaf3f3'}">${l.text}</span>
+      <span class="copyHint">${copiedLineKey===l.key ? 'copiato' : 'copia'}</span>
+    </div>
+  `).join('');
+  // ogni volta che rigeneriamo l'HTML delle righe, dobbiamo RIATTACCARE
+  // gli event listener — in React questo passo non esiste, JSX li ricollega da solo
+  el('lines').querySelectorAll('.lineRow').forEach(row => {
+    row.addEventListener('click', () => {
+      navigator.clipboard?.writeText(row.dataset.text);
+      copiedLineKey = row.dataset.key;
+      render();
+      setTimeout(() => { copiedLineKey = null; render(); }, 1200);
+    });
+  });
+}
+
+// ============================================================
+// Eventi — qui il conteggio onesto: sono tanti quanti in React,
+// solo che ognuno chiama render() a mano invece che essere
+// "collegato" automaticamente al JSX.
+// ============================================================
+el('textInput').addEventListener('input', e => { state.text = e.target.value; render(); });
+el('fontSelect').addEventListener('change', e => { state.familyBase = Number(e.target.value); render(); });
+el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; render(); });
+el('boldCk').addEventListener('change', e => { state.bold = e.target.checked; render(); });
+el('paperColor').addEventListener('input', e => { state.paperColor = e.target.value; render(); });
+
+const TOOLTIP_TEXT = {
+  permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
+  nonpermanente: "Non permanente: l'elemento non viene ritracciato automaticamente; se la finestra viene coperta e poi riscoperta, quella parte di testo o grafica sparisce (a meno che non venga ridisegnata esplicitamente dal programma).",
+};
+
+el('nonPermCk').addEventListener('change', () => { state.permanent = false; el('permCk').checked = false; render(); });
+el('permCk').addEventListener('change', () => { state.permanent = true; el('nonPermCk').checked = false; render(); });
+
+function showTooltip(key) { el('tooltip').textContent = TOOLTIP_TEXT[key]; el('tooltip').style.display = 'block'; }
+function hideTooltip() { el('tooltip').style.display = 'none'; }
+el('nonPermLabel').addEventListener('mouseenter', () => showTooltip('nonpermanente'));
+el('nonPermLabel').addEventListener('mouseleave', hideTooltip);
+el('permLabel').addEventListener('mouseenter', () => showTooltip('permanente'));
+el('permLabel').addEventListener('mouseleave', hideTooltip);
+
+el('resetBtn').addEventListener('click', () => {
+  const ts = textSize();
+  state.pos = {
+    x: clamp(SCREEN_W/2 - ts.w/2, SCREEN_W),
+    y: clamp(SCREEN_H/2 - ts.h/2, SCREEN_H),
+  };
+  render();
+});
+
+el('copyAllBtn').addEventListener('click', () => {
+  const snippet = `font ${fontId()}\ngcursor ${state.pos.x},${state.pos.y}\nprint "${state.text}"`;
+  navigator.clipboard?.writeText(snippet);
+});
+
+// drag: identico nello spirito al tuo /testo esistente
+const screenEl = el('screen');
+el('dragText').addEventListener('mousedown', e => {
+  e.preventDefault();
+  const rect = screenEl.getBoundingClientRect();
+  dragOffset.dx = e.clientX - (rect.left + state.pos.x * SCALE);
+  dragOffset.dy = e.clientY - (rect.top + state.pos.y * SCALE);
+  dragging = true;
+  render();
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (e.clientX - dragOffset.dx - rect.left) / SCALE;
+  const rawY = (e.clientY - dragOffset.dy - rect.top) / SCALE;
+  state.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('mouseup', () => { dragging = false; render(); });
+
+// init: popola il dropdown una volta sola
+FAMILIES.forEach(f => {
+  const opt = document.createElement('option');
+  opt.value = f.base;
+  opt.textContent = `${f.w}×${f.h}px`;
+  el('fontSelect').appendChild(opt);
+});
+el('fontSelect').value = state.familyBase;
+render();
+</script>
+</body>
+</html>

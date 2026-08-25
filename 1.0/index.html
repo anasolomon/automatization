@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Convertitore Video per Techla</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 40px auto; }
+  label { display: block; margin-top: 12px; font-weight: 600; }
+  input, select { width: 100%; padding: 6px; box-sizing: border-box; }
+  button { margin-top: 20px; padding: 10px 20px; }
+  #status { margin-top: 16px; }
+</style>
+</head>
+<body>
+  <h1>Convertitore Video → AVI/MJPEG</h1>
+  <form id="form">
+    <label>File video (.mp4)</label>
+    <input type="file" name="video" accept="video/*" required>
+
+    <label>Qualità (1=migliore, 31=peggiore)</label>
+    <input type="number" name="quality" min="1" max="31" value="5">
+
+    <label>Frame rate</label>
+    <input type="number" name="frame_rate" min="1" max="60" value="15">
+
+    <label>Rotazione</label>
+    <select name="rotation">
+      <option value="0">Nessuna</option>
+      <option value="2">90° sinistra</option>
+      <option value="1">90° destra</option>
+    </select>
+
+    <label>Larghezza</label>
+    <input type="number" name="width" value="1370">
+
+    <label>Altezza</label>
+    <input type="number" name="height" value="768">
+
+    <button type="submit">Converti</button>
+  </form>
+  <div id="status"></div>
+
+<script>
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('status');
+  status.textContent = 'Conversione in corso...';
+
+  const formData = new FormData(e.target);
+
+  try {
+    const res = await fetch('/convert', { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json();
+      status.textContent = 'Errore: ' + (err.error || 'sconosciuto');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'video_convertito.avi';
+    a.click();
+    status.textContent = 'Fatto! Download avviato.';
+  } catch (err) {
+    status.textContent = 'Errore di rete: ' + err.message;
+  }
+});
+</script>
+</body>
+</html>

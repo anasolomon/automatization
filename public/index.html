@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Strumenti Techla — MyFamily</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, sans-serif;
+    background: #0a1418;
+    color: #e8f1f3;
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .buttons { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  a.card {
+    display: block;
+    width: 220px;
+    padding: 28px 20px;
+    background: #10222a;
+    border: 1px solid #24424e;
+    border-radius: 12px;
+    color: #e8f1f3;
+    text-decoration: none;
+    text-align: center;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  a.card:hover { border-color: #ffb454; transform: translateY(-2px); }
+  a.card .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  a.card .desc { font-size: 13px; color: #6b8b94; }
+</style>
+</head>
+<body>
+  <h1>Strumenti Techla</h1>
+  <div class="buttons">
+    <a class="card" href="/avi_converter.html">
+      <div class="title">Convertitore Video</div>
+      <div class="desc">MP4 &rarr; AVI per screensaver</div>
+    </a>
+    <a class="card" href="/jpg_converter.html">
+      <div class="title">Convertitore Immagini</div>
+      <div class="desc">JPG/PNG ruotati e ridimensionati per Techla</div>
+    </a>
+    <a class="card" href="/coordinate_testo.html">
+      <div class="title">Calcolatore Coordinate</div>
+      <div class="desc">Posiziona il testo, ottieni gcursor</div>
+    </a>
+  </div>
+</body>
+</html>

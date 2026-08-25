@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Convertitore Video per Techla</title>
+<style>
+  :root { --bg:#0a1418; --panel:#10222a; --border:#24424e; --accent:#ffb454; --text:#e8f1f3; --dim:#7a9aa3; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 480px; margin: 0 auto; padding: 24px;
+    min-height: 100vh;
+  }
+  a.back { text-decoration: none; color: var(--accent); font-size: 13px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 16px 0 4px; }
+  label { display: block; margin-top: 16px; font-weight: 600; font-size: 13px; color: var(--dim); }
+  input, select {
+    width: 100%; padding: 9px 10px; margin-top: 6px; box-sizing: border-box;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 14px;
+  }
+  input[type=file] { padding: 8px; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button {
+    margin-top: 24px; padding: 11px 22px; width: 100%;
+    background: var(--accent); border: none; border-radius: 8px;
+    color: #0a1418; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  button:hover { opacity: 0.92; }
+  #status { margin-top: 16px; font-size: 13px; color: var(--dim); min-height: 18px; }
+</style>
+</head>
+<body>
+  <a class="back" href="/">&larr; Torna alla home</a>
+  <h1>Convertitore Video &rarr; AVI</h1>
+  <form id="form">
+    <label>File video (.mp4)</label>
+    <input type="file" name="video" accept="video/*" required>
+
+    <label>Qualità (1=migliore, 31=peggiore)</label>
+    <input type="number" name="quality" min="1" max="31" value="5">
+
+    <label>Frame rate</label>
+    <input type="number" name="frame_rate" min="1" max="60" value="15">
+
+    <label>Rotazione</label>
+    <select name="rotation">
+      <option value="0">Nessuna</option>
+      <option value="2">90° sinistra</option>
+      <option value="1">90° destra</option>
+    </select>
+
+    <label>Larghezza</label>
+    <input type="number" name="width" value="1370">
+
+    <label>Altezza</label>
+    <input type="number" name="height" value="768">
+
+    <button type="submit">Converti</button>
+  </form>
+  <div id="status"></div>
+
+<script>
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('status');
+  status.textContent = 'Conversione in corso...';
+
+  const formData = new FormData(e.target);
+
+  try {
+    const res = await fetch('/avi_converter', { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json();
+      status.textContent = 'Errore: ' + (err.error || 'sconosciuto');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'video_convertito.avi';
+    a.click();
+    status.textContent = 'Fatto! Download avviato.';
+  } catch (err) {
+    status.textContent = 'Errore di rete: ' + err.message;
+  }
+});
+</script>
+</body>
+</html>
