@@ -13,9 +13,10 @@
   #screen { position:relative; width:384px; height:683px; background:var(--panel);
             border:3px solid #1e4a52; border-radius:14px; overflow:hidden;
             box-shadow:0 20px 50px rgba(0,0,0,0.45); }
-  #dragText { position:absolute; display:flex; align-items:center; justify-content:center;
+  #dragText { position:absolute; display:flex; align-items:center; justify-content:flex-start;
               color:#fff; font-family:monospace; white-space:nowrap; overflow:hidden;
               cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:border-box; }
+  #dragTextInner { display:inline-block; transform-origin: left center; }
   #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
   #dot { position:absolute; width:8px; height:8px; border-radius:50%; background:var(--accent);
          box-shadow:0 0 0 3px rgba(255,179,122,0.25); }
@@ -58,7 +59,7 @@
   <div class="screenWrap">
     <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
     <div id="screen">
-      <div id="dragText">Christopher</div>
+      <div id="dragText"><span id="dragTextInner">Christopher</span></div>
       <div id="dot"></div>
     </div>
     <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
@@ -131,8 +132,6 @@ const FAMILIES = [
   { base:69, w:32,  h:48  },
   { base:17, w:36,  h:48  },
   { base:21, w:48,  h:64  },
-  { base:33, w:60,  h:80  },
-  { base:41, w:84,  h:112 },
 ].sort((a,b) => a.w*a.h - b.w*b.h);
 
 let state = {
@@ -158,6 +157,45 @@ const textSize = () => {
 };
 const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
 
+// Misura la larghezza REALE con cui il browser renderizzerebbe il testo,
+// con un dato font/dimensione — serve per calcolare di quanto stirarlo
+// (scaleX) per farlo combaciare esattamente con la larghezza del riquadro,
+// sia a sinistra che a destra.
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d');
+function measureTextWidth(text, fontCss) {
+  measureCtx.font = fontCss;
+  return measureCtx.measureText(text).width;
+}
+
+// navigator.clipboard.writeText richiede un contesto "sicuro" (HTTPS o
+// esattamente "localhost") — se manca, fallisce silenziosamente senza
+// nessun errore visibile. Questo fallback usa un vecchio metodo (una
+// textarea nascosta + execCommand) che funziona quasi ovunque, come
+// riserva quando l'API moderna non è disponibile o fallisce.
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return fallbackCopy(text);
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } catch (err) {
+    console.error('Copia negli appunti fallita:', err);
+  }
+  document.body.removeChild(textarea);
+}
+
 // ============================================================
 // LA PARTE CHE IN REACT ERA "GRATIS": qui la scriviamo a mano.
 // Ogni volta che qualcosa cambia, richiamiamo NOI stessi render()
@@ -171,15 +209,38 @@ function render() {
 
   // --- testo trascinabile ---
   const dragEl = el('dragText');
-  dragEl.textContent = state.text || ' ';
+  const dragInner = el('dragTextInner');
+  const boxWidthPx = ts.w * SCALE;
+  const boxHeightPx = ts.h * SCALE;
+  const fontWeight = state.bold ? '700' : '400';
+
+  dragInner.textContent = state.text || ' ';
   dragEl.style.left = (state.pos.x * SCALE) + 'px';
   dragEl.style.top = (state.pos.y * SCALE) + 'px';
-  dragEl.style.width = (ts.w * SCALE) + 'px';
-  dragEl.style.height = (ts.h * SCALE) + 'px';
+  dragEl.style.width = boxWidthPx + 'px';
+  dragEl.style.height = boxHeightPx + 'px';
   dragEl.style.background = state.transparent ? 'transparent' : state.paperColor;
-  dragEl.style.fontWeight = state.bold ? '700' : '400';
-  dragEl.style.fontSize = (f.h * SCALE * 0.65) + 'px';
+  dragInner.style.fontWeight = fontWeight;
+  dragInner.style.fontFamily = 'monospace';
+  dragInner.style.transform = 'none'; // nessuna deformazione
   dragEl.classList.toggle('dragging', dragging);
+
+  // Invece di stirare il testo dopo averlo disegnato (che lo deforma),
+  // calcolo la dimensione del font GIUSTA in anticipo: i font scalano
+  // linearmente, quindi misurando la larghezza a una dimensione di prova
+  // posso correggerla proporzionalmente in un solo passaggio, senza mai
+  // distorcere i caratteri.
+  // Margine puramente visivo (non tocca gcursor/font copiati): il testo si
+  // adatta a una larghezza leggermente più stretta del riquadro vero, per
+  // respirare un po' dai bordi invece di toccarli esattamente.
+  const VISUAL_MARGIN_PX = 8;
+  const fitWidthPx = Math.max(1, boxWidthPx - VISUAL_MARGIN_PX * 2);
+
+  const trialSize = f.h * SCALE * 0.65;
+  const trialWidth = measureTextWidth(state.text || ' ', `${fontWeight} ${trialSize}px monospace`);
+  const correctedSize = trialWidth > 0 ? trialSize * (fitWidthPx / trialWidth) : trialSize;
+  dragInner.style.fontSize = correctedSize + 'px';
+  dragInner.style.margin = `${VISUAL_MARGIN_PX}px 0 ${VISUAL_MARGIN_PX}px ${VISUAL_MARGIN_PX}px`;
 
   // --- puntino del gcursor ---
   el('dot').style.left = (state.pos.x * SCALE - 4) + 'px';
@@ -209,16 +270,9 @@ function render() {
       <span class="copyHint">${copiedLineKey===l.key ? 'copiato' : 'copia'}</span>
     </div>
   `).join('');
-  // ogni volta che rigeneriamo l'HTML delle righe, dobbiamo RIATTACCARE
-  // gli event listener — in React questo passo non esiste, JSX li ricollega da solo
-  el('lines').querySelectorAll('.lineRow').forEach(row => {
-    row.addEventListener('click', () => {
-      navigator.clipboard?.writeText(row.dataset.text);
-      copiedLineKey = row.dataset.key;
-      render();
-      setTimeout(() => { copiedLineKey = null; render(); }, 1200);
-    });
-  });
+  // Nota: NON riattacco qui gli event listener alle singole righe — vengono
+  // ricreate ad ogni render(), e riattaccarli ogni volta è fragile.
+  // Il click è gestito una volta sola più sotto, per "delega" sul contenitore.
 }
 
 // ============================================================
@@ -231,6 +285,20 @@ el('fontSelect').addEventListener('change', e => { state.familyBase = Number(e.t
 el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; render(); });
 el('boldCk').addEventListener('change', e => { state.bold = e.target.checked; render(); });
 el('paperColor').addEventListener('input', e => { state.paperColor = e.target.value; render(); });
+
+// Click sulle righe di codice: un SOLO listener, attaccato al contenitore
+// (#lines) che esiste per tutta la vita della pagina — non alle singole
+// righe, che vengono distrutte e ricreate ad ogni render(). Uso
+// e.target.closest per capire su quale riga è avvenuto il click, anche
+// se il click è caduto su uno degli <span> interni.
+el('lines').addEventListener('click', (e) => {
+  const row = e.target.closest('.lineRow');
+  if (!row) return;
+  copyToClipboard(row.dataset.text);
+  copiedLineKey = row.dataset.key;
+  render();
+  setTimeout(() => { copiedLineKey = null; render(); }, 1200);
+});
 
 const TOOLTIP_TEXT = {
   permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
@@ -258,7 +326,11 @@ el('resetBtn').addEventListener('click', () => {
 
 el('copyAllBtn').addEventListener('click', () => {
   const snippet = `font ${fontId()}\ngcursor ${state.pos.x},${state.pos.y}\nprint "${state.text}"`;
-  navigator.clipboard?.writeText(snippet);
+  copyToClipboard(snippet);
+  const btn = el('copyAllBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Copiato!';
+  setTimeout(() => { btn.textContent = original; }, 1200);
 });
 
 // drag: identico nello spirito al tuo /testo esistente

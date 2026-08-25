@@ -33,7 +33,9 @@ const uploadImage = multer({
     destination: UPLOAD_DIR,
     filename: (req, file, cb) => {
       // Preservo l'estensione originale (.jpg/.png/...), invece di lasciare
-      // che multer dia un nome casuale SENZA estensione
+      // che multer dia un nome casuale SENZA estensione — più robusto per
+      // ImageMagick, che di solito riconosce il formato dal contenuto ma
+      // non è garantito farlo sempre allo stesso modo con ogni policy.
       const ext = path.extname(file.originalname) || '.jpg';
       cb(null, `img_${Date.now()}${ext}`);
     },
@@ -41,7 +43,14 @@ const uploadImage = multer({
   limits: { fileSize: 30 * 1024 * 1024 } // 30 MB, un'immagine non ha bisogno di più
 });
 
-
+// express.static serve automaticamente TUTTI i file dentro public/:
+//   /                       -> public/index.html         (pagina con i 3 bottoni)
+//   /avi_converter.html     -> public/avi_converter.html  (convertitore video)
+//   /jpg_converter.html     -> public/jpg_converter.html  (convertitore immagini)
+//   /coordinate_testo.html  -> public/coordinate_testo.html (calcolatore coordinate)
+// Nessuna rotta esplicita serve per queste pagine: sono file statici,
+// non template da "renderizzare" — per quello servirebbe un view engine
+// (es. app.set('view engine','ejs')) che qui non è configurato.
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- L'endpoint vero e proprio ----------------------------------------
@@ -87,10 +96,14 @@ app.post('/avi_converter', upload.single('video'), (req, res) => {
     stderrLog += data.toString();
   });
 
+  let responded = false; // evita di rispondere due volte (error + close possono scattare entrambi)
+
   ffmpegProcess.on('error', (err) => {
     // Scatta tipicamente se ffmpeg non è trovato/nel PATH
     console.error('Errore avvio ffmpeg:', err);
     cleanupUpload(inputPath);
+    if (responded) return;
+    responded = true;
     res.status(500).json({
       error: 'Impossibile avviare ffmpeg. Controlla il percorso (FFMPEG_PATH).',
       details: err.message
@@ -99,9 +112,11 @@ app.post('/avi_converter', upload.single('video'), (req, res) => {
 
   ffmpegProcess.on('close', (code) => {
     cleanupUpload(inputPath);
+    if (responded) return; // "error" ha già risposto per questa stessa richiesta
 
     if (code !== 0) {
       console.error('ffmpeg terminato con errore, log:', stderrLog);
+      responded = true;
       return res.status(500).json({
         error: 'Conversione fallita.',
         ffmpegLog: stderrLog
@@ -109,6 +124,7 @@ app.post('/avi_converter', upload.single('video'), (req, res) => {
     }
 
     // Successo: invia il file convertito come download
+    responded = true;
     res.download(outputPath, 'video_convertito.avi', (err) => {
       // Pulizia del file di output dopo l'invio, come faceva download.php
       fs.unlink(outputPath, () => {});
@@ -122,6 +138,9 @@ function cleanupUpload(filePath) {
 }
 
 // --- Convertitore immagini (ImageMagick) --------------------------------
+// Stesso identico principio di /avi_converter: costruiamo gli argomenti che
+// useresti a mano, e li passiamo a "magick" come processo esterno.
+// Equivalente a:
 //   magick input -rotate -90 -resize 1366x768^ -gravity center -extent 1366x768 output.jpg
 app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
   if (!req.file) {
@@ -131,6 +150,20 @@ app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
   const rotation = parseInt(req.body.rotation, 10) || 0;
   const width = parseInt(req.body.width, 10) || 1366;
   const height = parseInt(req.body.height, 10) || 768;
+
+  // Dimensioni ESATTE a cui ridimensionare, già calcolate dal browser
+  // (coprono il riquadro se zoom>=1, sono più piccole se zoom<1).
+  const resizeW = parseInt(req.body.resize_w, 10) || width;
+  const resizeH = parseInt(req.body.resize_h, 10) || height;
+
+  // 'crop'  -> l'immagine è grande almeno quanto il riquadro: si ritaglia
+  //            dal punto scelto trascinando (crop_x, crop_y)
+  // 'pad'   -> l'immagine è più piccola del riquadro (zoom ridotto): si
+  //            centra e si riempie il resto con "border_color"
+  const mode = req.body.mode === 'pad' ? 'pad' : 'crop';
+  const cropX = parseInt(req.body.crop_x, 10) || 0;
+  const cropY = parseInt(req.body.crop_y, 10) || 0;
+  const borderColor = req.body.border_color || '#ffffff';
 
   const inputPath = req.file.path;
   const outputFileName = `converted_${Date.now()}.jpg`;
@@ -142,12 +175,18 @@ app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
     args.push('-rotate', String(rotation));
   }
 
-  args.push(
-    '-resize', `${width}x${height}^`,
-    '-gravity', 'center',
-    '-extent', `${width}x${height}`,
-    outputPath
-  );
+  // Ridimensiono alle dimensioni esatte scelte (già includono lo zoom).
+  // "!" forza le dimensioni esatte, anche se in pratica coincidono già
+  // con le proporzioni originali (calcolate identicamente sul client).
+  args.push('-resize', `${resizeW}x${resizeH}!`);
+
+  if (mode === 'crop') {
+    args.push('-crop', `${width}x${height}+${cropX}+${cropY}`, '+repage');
+  } else {
+    args.push('-background', borderColor, '-gravity', 'center', '-extent', `${width}x${height}`);
+  }
+
+  args.push(outputPath);
 
   console.log('Comando magick:', IMAGEMAGICK_PATH, args.join(' '));
 
@@ -158,9 +197,13 @@ app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
     stderrLog += data.toString();
   });
 
+  let responded = false;
+
   magickProcess.on('error', (err) => {
     console.error('Errore avvio magick:', err);
     cleanupUpload(inputPath);
+    if (responded) return;
+    responded = true;
     res.status(500).json({
       error: 'Impossibile avviare ImageMagick. Controlla il percorso (IMAGEMAGICK_PATH).',
       details: err.message
@@ -169,15 +212,18 @@ app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
 
   magickProcess.on('close', (code) => {
     cleanupUpload(inputPath);
+    if (responded) return;
 
     if (code !== 0) {
       console.error('magick terminato con errore, log:', stderrLog);
+      responded = true;
       return res.status(500).json({
         error: 'Conversione immagine fallita.',
         magickLog: stderrLog
       });
     }
 
+    responded = true;
     res.download(outputPath, 'immagine_techla.jpg', (err) => {
       fs.unlink(outputPath, () => {});
       if (err) console.error('Errore invio file:', err);
@@ -188,4 +234,5 @@ app.post('/jpg_converter', uploadImage.single('image'), (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server in ascolto su http://localhost:${PORT}`);
   console.log(`FFmpeg path: ${FFMPEG_PATH}`);
+  console.log(`ImageMagick path: ${IMAGEMAGICK_PATH}`);
 });
