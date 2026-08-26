@@ -7,7 +7,7 @@
   :root { --bg:#0d2b33; --panel:#0a1f26; --border:#235057; --accent:#ffb37a; --dim:#7fb8bd; }
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; background:var(--bg); color:#eaf3f3; font-family:system-ui,sans-serif;
-         display:flex; flex-wrap:wrap; gap:28px; padding:24px; justify-content:center; }
+         display:flex; flex-wrap:wrap; gap:28px; padding:2px 24px 8px; justify-content:center; }
   .screenWrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
   .screenLabel { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); }
   #screen { position:relative; width:384px; height:683px; background:var(--panel);
@@ -18,8 +18,6 @@
               cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:border-box; }
   #dragTextInner { display:inline-block; transform-origin: left center; }
   #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
-  #dot { position:absolute; width:8px; height:8px; border-radius:50%; background:var(--accent);
-         box-shadow:0 0 0 3px rgba(255,179,122,0.25); }
   .panel { width:340px; display:flex; flex-direction:column; gap:16px; }
   h1 { font-size:22px; font-weight:700; margin:0; }
   .sub { font-size:13px; color:#9cc9cd; margin-top:4px; }
@@ -27,13 +25,14 @@
   input[type=text], select { background:var(--panel); border:1px solid var(--border); border-radius:8px;
          padding:8px 10px; color:#fff; font-size:14px; }
   .checkboxRow { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+  #boldCk:disabled { cursor:not-allowed; }
   .colorRow { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--dim); }
   .tooltip { position:absolute; top:calc(100% + 8px); left:0; width:300px; z-index:10;
          background:#123840; border:1px solid #2d6069; border-radius:8px; padding:10px 12px;
          font-size:12.5px; line-height:1.5; color:#eaf3f3; box-shadow:0 8px 24px rgba(0,0,0,0.4);
          display:none; }
   button.reset { background:#1e4a52; border:1px solid #2d6069; border-radius:8px; padding:9px 12px;
-         color:#eaf3f3; font-size:13px; cursor:pointer; }
+         color:#eaf3f3; font-size:13px; cursor:pointer; text-align:left; }
   .readout { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px;
          display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:13px; }
   .readout .row { display:flex; justify-content:space-between; }
@@ -52,7 +51,7 @@
 </style>
 </head>
 <body>
-  <p style="width:100%;text-align:center;margin-bottom:0;">
+  <p style="width:100%;text-align:center;margin:0;">
     <a href="/" style="text-decoration:none;color:#ffb454;">&larr; Torna alla home</a>
   </p>
 
@@ -60,17 +59,11 @@
     <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
     <div id="screen">
       <div id="dragText"><span id="dragTextInner">Christopher</span></div>
-      <div id="dot"></div>
     </div>
     <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
   </div>
 
   <div class="panel">
-    <div>
-      <h1>Posiziona testo Techla (vanilla)</h1>
-      <div class="sub">Stessa logica della versione React, scritta a mano.</div>
-    </div>
-
     <label class="field">
       <span>Testo</span>
       <input type="text" id="textInput" value="Christopher">
@@ -81,11 +74,13 @@
       <select id="fontSelect"></select>
     </label>
 
-    <label class="checkboxRow"><input type="checkbox" id="transparentCk"> Trasparente (non spuntato = coprente)</label>
-    <label class="checkboxRow"><input type="checkbox" id="boldCk"> Bold</label>
+    <div style="display:flex; gap:16px;">
+      <label class="checkboxRow" style="width:130px;"><input type="checkbox" id="coprenteCk" checked> Coprente</label>
+      <label class="checkboxRow"><input type="checkbox" id="transparentCk"> Trasparente</label>
+    </div>
 
     <div style="position:relative;display:flex;gap:16px;">
-      <label class="checkboxRow" id="nonPermLabel">
+      <label class="checkboxRow" id="nonPermLabel" style="width:130px;">
         <input type="checkbox" id="nonPermCk" checked> Non permanente
       </label>
       <label class="checkboxRow" id="permLabel">
@@ -94,23 +89,48 @@
       <div id="tooltip" class="tooltip"></div>
     </div>
 
+    <label class="checkboxRow" id="boldRow">
+      <input type="checkbox" id="boldCk">
+      <span id="boldLabel">Bold</span>
+      <span id="boldDisabledNote" style="display:none; color:#ff6b6b; font-size:12px;">Troppo piccolo per bold</span>
+      <span id="numbersOnlyNote" style="display:none; font-size:12px; color:var(--dim);">solo per numeri</span>
+    </label>
+
     <label class="colorRow" id="colorRow">
       <span>Colore paper (sfondo dietro al testo)</span>
       <input type="color" id="paperColor" value="#0d2b6b">
     </label>
 
-    <button class="reset" id="resetBtn">Reset — ricentra orizzontalmente e verticalmente</button>
+    <button class="reset" id="resetHBtn">Reset — solo orizzontale</button>
+    <button class="reset" id="resetVBtn">Reset — solo verticale</button>
+
+    <div id="bgPicker" style="margin-top:12px;">
+      <div style="font-size:13px; color:var(--dim); margin-bottom:8px;">Scegli sfondo Techla</div>
+      <div style="display:flex; gap:8px;">
+        <input type="file" id="bgFileInput" accept="image/*" style="flex:1; padding:8px; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:13px;">
+        <button type="button" class="reset" id="bgResetBtn" style="margin-top:0; width:auto;">Reset</button>
+      </div>
+    </div>
 
     <div class="readout">
-      <div class="row"><span>font</span><span class="val" id="outFont">-</span></div>
-      <div class="row"><span>gcursor X</span><span class="val" id="outX">-</span></div>
-      <div class="row"><span>gcursor Y</span><span class="val" id="outY">-</span></div>
-      <div class="divider"></div>
       <div class="row"><span>larghezza testo (px)</span><span id="outW">-</span></div>
       <div class="row"><span>altezza testo (px)</span><span id="outH">-</span></div>
     </div>
 
-    <div class="lines" id="lines"></div>
+    <div class="lines" id="lines">
+      <div class="lineRow" id="lineRow-font" data-text="">
+        <span class="lineText" id="lineText-font">font <span id="editFont" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">13</span></span>
+        <span class="copyHint" id="copyHint-font">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-gcursor" data-text="">
+        <span class="lineText" id="lineText-gcursor">gcursor <span id="editX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span>,<span id="editY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span></span>
+        <span class="copyHint" id="copyHint-gcursor">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-print" data-text="">
+        <span class="lineText" id="lineText-print"></span>
+        <span class="copyHint" id="copyHint-print">copia</span>
+      </div>
+    </div>
 
     <button class="copyAll" id="copyAllBtn">Copia il codice PLC</button>
   </div>
@@ -125,13 +145,22 @@ const SCREEN_W = 768, SCREEN_H = 1366;
 const SCALE = 384 / SCREEN_W; // stessa idea dello "scale" in App.jsx, qui fisso per semplicità
 
 const FAMILIES = [
-  { base:5,  w:8,   h:13  },
-  { base:0,  w:12,  h:16  },
-  { base:53, w:16,  h:24  },
-  { base:13, w:24,  h:32  },
-  { base:69, w:32,  h:48  },
-  { base:17, w:36,  h:48  },
-  { base:21, w:48,  h:64  },
+  { base:0,  w:12,  h:16,  hebrewExcluded:false },
+  { base:1,  w:6,   h:10,  hebrewExcluded:true  },
+  { base:5,  w:8,   h:13,  hebrewExcluded:false },
+  { base:13, w:24,  h:32,  hebrewExcluded:false },
+  { base:17, w:36,  h:48,  hebrewExcluded:false },
+  { base:21, w:48,  h:64,  hebrewExcluded:false },
+  { base:33, w:60,  h:80,  hebrewExcluded:true  },
+  { base:37, w:72,  h:96,  hebrewExcluded:true  },
+  { base:41, w:84,  h:112, hebrewExcluded:true  },
+  { base:45, w:96,  h:128, hebrewExcluded:true  },
+  { base:49, w:108, h:144, hebrewExcluded:true  },
+  { base:53, w:16,  h:24,  hebrewExcluded:false },
+  { base:57, w:18,  h:24,  hebrewExcluded:true  },
+  { base:61, w:4,   h:6,   hebrewExcluded:true  },
+  { base:65, w:16,  h:26,  hebrewExcluded:true  },
+  { base:69, w:32,  h:48,  hebrewExcluded:false },
 ].sort((a,b) => a.w*a.h - b.w*b.h);
 
 let state = {
@@ -146,10 +175,38 @@ let state = {
 let dragging = false;
 let dragOffset = { dx:0, dy:0 };
 let copiedLineKey = null;
-
 const el = id => document.getElementById(id);
 const family = () => FAMILIES.find(f => f.base === state.familyBase);
 const fontId = () => family().base + (state.transparent ? 2 : 0) + (state.permanent ? 1 : 0) + (state.bold ? 100 : 0);
+
+// Scompone un numero di font digitato a mano nei suoi componenti reali
+// (famiglia, trasparente, bold), così può aggiornare lo STATO VERO invece
+// di essere solo un numero "finto" scollegato da dropdown/simulazione.
+// Ritorna null se il numero non corrisponde a nessuna combinazione valida.
+function decomposeFontId(num) {
+  // Soglia Bold: 101-172 = Bold acceso, sotto = Bold spento (come richiesto).
+  const bold = num >= 101;
+  const withoutBold = bold ? num - 100 : num;
+  for (const f of FAMILIES) {
+    const diff = withoutBold - f.base;
+    // Ogni famiglia occupa un blocco di 4 numeri: base(coprente),
+    // base+1(coprente permanente), base+2(trasparente), base+3(trasparente
+    // permanente). Il "permanente" non è esposto in UI, quindi 0/1 diventano
+    // coprente, 2/3 diventano trasparente — accetto l'intero blocco, non
+    // solo i due valori esatti 0 e 2 come prima (troppo restrittivo).
+    if (diff >= 0 && diff <= 3) {
+      const boldNotAvailable = (f.base === 0 || f.base === 1);
+      if (bold && boldNotAvailable) return null; // stessa regola della checkbox Bold disabilitata
+      return {
+        familyBase: f.base,
+        transparent: diff === 2 || diff === 3,
+        permanent: diff === 1 || diff === 3,
+        bold,
+      };
+    }
+  }
+  return null;
+}
 const textSize = () => {
   const f = family();
   const chars = state.text.length || 1;
@@ -205,7 +262,23 @@ function render() {
   const f = family();
   const ts = textSize();
 
-  // --- popola il dropdown (fatto una volta sola, vedi init) ---
+  // Regola 1: Bold non disponibile per i font 12x16 e 6x10 — la checkbox
+  // resta visibile ma disabilitata (non cliccabile), "Bold" diventa rosso
+  // e barrato, con una nota a sinistra che spiega il motivo.
+  const boldNotAvailable = (f.base === 0 || f.base === 1);
+  el('boldCk').disabled = boldNotAvailable;
+  el('boldDisabledNote').style.display = boldNotAvailable ? 'inline' : 'none';
+  el('boldLabel').style.color = boldNotAvailable ? '#ff6b6b' : '';
+  el('boldLabel').style.textDecoration = boldNotAvailable ? 'line-through' : 'none';
+  if (boldNotAvailable && state.bold) {
+    state.bold = false;
+    el('boldCk').checked = false;
+  }
+
+  // Regola 2: "solo per numeri" compare SOLO se il font 4x6 (base 61) è
+  // selezionato E Bold è spuntato — sparisce cambiando font o togliendo Bold.
+  const showNumbersOnlyNote = (f.base === 61 && state.bold);
+  el('numbersOnlyNote').style.display = showNumbersOnlyNote ? 'inline' : 'none';
 
   // --- testo trascinabile ---
   const dragEl = el('dragText');
@@ -225,26 +298,52 @@ function render() {
   dragInner.style.transform = 'none'; // nessuna deformazione
   dragEl.classList.toggle('dragging', dragging);
 
-  // Invece di stirare il testo dopo averlo disegnato (che lo deforma),
-  // calcolo la dimensione del font GIUSTA in anticipo: i font scalano
-  // linearmente, quindi misurando la larghezza a una dimensione di prova
-  // posso correggerla proporzionalmente in un solo passaggio, senza mai
-  // distorcere i caratteri.
-  // Margine puramente visivo (non tocca gcursor/font copiati): il testo si
-  // adatta a una larghezza leggermente più stretta del riquadro vero, per
-  // respirare un po' dai bordi invece di toccarli esattamente.
-  const VISUAL_MARGIN_PX = 8;
-  const fitWidthPx = Math.max(1, boxWidthPx - VISUAL_MARGIN_PX * 2);
+  try {
+    // Approccio semplificato: la dimensione del font si deriva SOLO
+    // dall'altezza disponibile (con margine proporzionale) — poi il
+    // risultato viene SEMPRE centrato orizzontalmente, qualunque sia
+    // la sua larghezza naturale. Questo evita margini asimmetrici,
+    // che nascevano da due correzioni in serie (larghezza poi altezza).
+    const marginX = Math.min(8, boxWidthPx * 0.12);
+    const marginY = Math.min(8, boxHeightPx * 0.12);
+    const fitWidthPx = Math.max(1, boxWidthPx - marginX * 2);
+    const fitHeightPx = Math.max(1, boxHeightPx - marginY * 2);
 
-  const trialSize = f.h * SCALE * 0.65;
-  const trialWidth = measureTextWidth(state.text || ' ', `${fontWeight} ${trialSize}px monospace`);
-  const correctedSize = trialWidth > 0 ? trialSize * (fitWidthPx / trialWidth) : trialSize;
-  dragInner.style.fontSize = correctedSize + 'px';
-  dragInner.style.margin = `${VISUAL_MARGIN_PX}px 0 ${VISUAL_MARGIN_PX}px ${VISUAL_MARGIN_PX}px`;
+    // Stima diretta dall'altezza: per un font monospace tipico, l'altezza
+    // "visibile" di un carattere è circa il 70% della dimensione impostata.
+    // È una stima, non un valore esatto — ma è STABILE tra i vari browser,
+    // a differenza di actualBoundingBoxAscent/Descent che si comporta in
+    // modo incoerente da un browser all'altro.
+    let fontSize = fitHeightPx / 0.7;
+
+    measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
+    let actualWidth = measureCtx.measureText(state.text || ' ').width;
+
+    // Se il testo naturale è più largo dello spazio disponibile, restringo
+    // proporzionalmente (qui serve davvero, altrimenti uscirebbe dal
+    // riquadro). Se invece è più stretto, lo lascio così: verrà centrato,
+    // non riempie tutta la larghezza ma non è un problema visivo.
+    if (actualWidth > fitWidthPx) {
+      fontSize = fontSize * (fitWidthPx / actualWidth);
+      measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
+      actualWidth = measureCtx.measureText(state.text || ' ').width;
+    }
+
+    dragInner.style.fontSize = fontSize + 'px';
+    // Centro SEMPRE in base alla larghezza reale ottenuta — garantisce
+    // margini simmetrici in ogni caso, indipendentemente da quale vincolo
+    // (larghezza o altezza) abbia determinato la dimensione finale.
+    dragInner.style.marginLeft = Math.max(0, (boxWidthPx - actualWidth) / 2) + 'px';
+    dragInner.style.marginTop = '0';
+    dragInner.style.marginBottom = '0';
+  } catch (err) {
+    // Un errore qui NON deve bloccare il resto di render() — in particolare
+    // le righe copiabili più sotto devono ricostruirsi comunque, anche se
+    // l'anteprima del testo restasse imprecisa per qualche caso limite.
+    console.error('Errore nel calcolo dimensione testo (il resto continua comunque):', err);
+  }
 
   // --- puntino del gcursor ---
-  el('dot').style.left = (state.pos.x * SCALE - 4) + 'px';
-  el('dot').style.top = (state.pos.y * SCALE - 4) + 'px';
 
   // --- QUESTO è il punto che in React era "automatico":
   //     mostra/nascondi il selettore colore in base a "transparent".
@@ -252,9 +351,6 @@ function render() {
   el('colorRow').style.visibility = state.transparent ? 'hidden' : 'visible';
 
   // --- riquadro numeri ---
-  el('outFont').textContent = fontId();
-  el('outX').textContent = state.pos.x;
-  el('outY').textContent = state.pos.y;
   el('outW').textContent = ts.w;
   el('outH').textContent = ts.h;
 
@@ -264,15 +360,29 @@ function render() {
     { key:'gcursor', text:`gcursor ${state.pos.x},${state.pos.y}` },
     { key:'print',   text:`print "${state.text}"` },
   ];
-  el('lines').innerHTML = lines.map(l => `
-    <div class="lineRow" data-key="${l.key}" data-text="${l.text.replace(/"/g,'&quot;')}">
-      <span style="color:${copiedLineKey===l.key ? '#8de3a0' : '#eaf3f3'}">${l.text}</span>
-      <span class="copyHint">${copiedLineKey===l.key ? 'copiato' : 'copia'}</span>
-    </div>
-  `).join('');
-  // Nota: NON riattacco qui gli event listener alle singole righe — vengono
-  // ricreate ad ogni render(), e riattaccarli ogni volta è fragile.
-  // Il click è gestito una volta sola più sotto, per "delega" sul contenitore.
+  // Le 3 righe esistono già nell'HTML, create una volta sola — qui mi
+  // limito ad AGGIORNARE i loro valori, senza mai ricrearle. Così un
+  // click su di loro (assegnato una volta, fuori da render()) funziona
+  // esattamente come per un bottone fisso.
+  lines.forEach(l => {
+    el(`lineRow-${l.key}`).dataset.text = l.text;
+    const textEl = el(`lineText-${l.key}`);
+    if (l.key === 'font') {
+      if (document.activeElement !== el('editFont')) el('editFont').textContent = fontId();
+    } else if (l.key === 'gcursor') {
+      // Non sovrascrivo tutto il testo (distruggerebbe editX/editY):
+      // aggiorno solo i due numeri interni, gli span restano gli stessi.
+      // Non aggiorno mentre l'utente sta scrivendo dentro (altrimenti un
+      // render() scattato per un altro motivo interromperebbe la modifica
+      // in corso, cancellando quello che stava digitando).
+      if (document.activeElement !== el('editX')) el('editX').textContent = state.pos.x;
+      if (document.activeElement !== el('editY')) el('editY').textContent = state.pos.y;
+    } else {
+      textEl.textContent = l.text;
+    }
+    textEl.style.color = copiedLineKey === l.key ? '#8de3a0' : '#eaf3f3';
+    el(`copyHint-${l.key}`).textContent = copiedLineKey === l.key ? 'copiato' : 'copia';
+  });
 }
 
 // ============================================================
@@ -282,23 +392,120 @@ function render() {
 // ============================================================
 el('textInput').addEventListener('input', e => { state.text = e.target.value; render(); });
 el('fontSelect').addEventListener('change', e => { state.familyBase = Number(e.target.value); render(); });
-el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; render(); });
+el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; el('coprenteCk').checked = !e.target.checked; render(); });
+el('coprenteCk').addEventListener('change', e => { state.transparent = !e.target.checked; el('transparentCk').checked = !e.target.checked; render(); });
 el('boldCk').addEventListener('change', e => { state.bold = e.target.checked; render(); });
 el('paperColor').addEventListener('input', e => { state.paperColor = e.target.value; render(); });
 
-// Click sulle righe di codice: un SOLO listener, attaccato al contenitore
-// (#lines) che esiste per tutta la vita della pagina — non alle singole
-// righe, che vengono distrutte e ricreate ad ogni render(). Uso
-// e.target.closest per capire su quale riga è avvenuto il click, anche
-// se il click è caduto su uno degli <span> interni.
-el('lines').addEventListener('click', (e) => {
-  const row = e.target.closest('.lineRow');
-  if (!row) return;
-  copyToClipboard(row.dataset.text);
-  copiedLineKey = row.dataset.key;
-  render();
-  setTimeout(() => { copiedLineKey = null; render(); }, 1200);
+el('bgFileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const screenEl2 = el('screen');
+  screenEl2.style.backgroundImage = `url(${url})`;
+  screenEl2.style.backgroundSize = 'cover';
+  screenEl2.style.backgroundPosition = 'center';
 });
+
+el('bgResetBtn').addEventListener('click', () => {
+  el('screen').style.backgroundImage = 'none';
+  el('bgFileInput').value = '';
+});
+
+// Click sulle righe di codice: qui NON serve più la delega, perché le
+// righe non vengono più ricreate — esistono fin dall'inizio, esattamente
+// come i bottoni. Assegno un listener diretto a ciascuna, una volta sola.
+['font', 'gcursor', 'print'].forEach(key => {
+  el(`lineRow-${key}`).addEventListener('click', () => {
+    const text = el(`lineRow-${key}`).dataset.text;
+    copyToClipboard(text);
+    copiedLineKey = key;
+    render();
+    setTimeout(() => { copiedLineKey = null; render(); }, 1200);
+  });
+});
+
+// Click su X o Y: impedisce che scatti ANCHE la copia dell'intera riga
+// (stopPropagation), permettendo di scrivere direttamente nello span
+// (contenteditable="true" nell'HTML). La modifica si conferma con Invio
+// o uscendo dal campo (blur); Esc annulla e ripristina il valore attuale.
+function commitEdit(spanId, axis, maxVal) {
+  const span = el(spanId);
+  const num = parseInt(span.textContent, 10);
+  if (!isNaN(num)) {
+    state.pos[axis] = clamp(num, maxVal);
+  }
+  render(); // ripristina comunque il testo (corregge input non validi)
+}
+
+['editX', 'editY'].forEach(id => {
+  const span = el(id);
+  const axis = id === 'editX' ? 'x' : 'y';
+  const maxVal = id === 'editX' ? SCREEN_W : SCREEN_H;
+
+  span.addEventListener('mousedown', e => e.stopPropagation());
+  span.addEventListener('click', e => e.stopPropagation());
+
+  span.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      span.blur(); // fa scattare il blur qui sotto, che salva
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      render(); // ripristina il valore attuale, annullando la modifica
+      span.blur();
+    }
+  });
+
+  span.addEventListener('blur', () => commitEdit(id, axis, maxVal));
+});
+
+// Stessa logica per il numero di font, con doppia validazione: deve
+// essere 0-172 E corrispondere a una vera combinazione famiglia+
+// trasparente+bold (decomposeFontId). Se non valido, richiamando
+// render() senza aver toccato lo stato, il campo torna a mostrare il
+// numero di prima — che sia calcolato o l'ultimo scritto valido.
+const editFontSpan = el('editFont');
+editFontSpan.addEventListener('mousedown', e => e.stopPropagation());
+editFontSpan.addEventListener('click', e => e.stopPropagation());
+
+editFontSpan.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    editFontSpan.blur();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    render();
+    editFontSpan.blur();
+  }
+});
+
+editFontSpan.addEventListener('blur', () => {
+  const num = parseInt(editFontSpan.textContent, 10);
+  if (!isNaN(num) && num >= 0 && num <= 172) {
+    const decomposed = decomposeFontId(num);
+    if (decomposed) {
+      // Aggiorno lo STATO VERO — questo è ciò che fa aggiornare anche
+      // la simulazione a schermo, non solo il numero scritto.
+      state.familyBase = decomposed.familyBase;
+      state.transparent = decomposed.transparent;
+      state.permanent = decomposed.permanent;
+      state.bold = decomposed.bold;
+      // Sincronizzo anche i controlli visivi, così mostrano la stessa scelta.
+      el('fontSelect').value = decomposed.familyBase;
+      el('transparentCk').checked = decomposed.transparent;
+      el('coprenteCk').checked = !decomposed.transparent;
+      el('permCk').checked = decomposed.permanent;
+      el('nonPermCk').checked = !decomposed.permanent;
+      el('boldCk').checked = decomposed.bold;
+    }
+    // se decomposed è null (numero valido ma non corrisponde a nessun
+    // font reale), non tocco lo stato — render() sotto ripristina il
+    // numero precedente, esattamente come per un numero fuori range.
+  }
+  render();
+});
+
 
 const TOOLTIP_TEXT = {
   permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
@@ -315,12 +522,15 @@ el('nonPermLabel').addEventListener('mouseleave', hideTooltip);
 el('permLabel').addEventListener('mouseenter', () => showTooltip('permanente'));
 el('permLabel').addEventListener('mouseleave', hideTooltip);
 
-el('resetBtn').addEventListener('click', () => {
+el('resetHBtn').addEventListener('click', () => {
   const ts = textSize();
-  state.pos = {
-    x: clamp(SCREEN_W/2 - ts.w/2, SCREEN_W),
-    y: clamp(SCREEN_H/2 - ts.h/2, SCREEN_H),
-  };
+  state.pos = { ...state.pos, x: clamp(SCREEN_W/2 - ts.w/2, SCREEN_W) };
+  render();
+});
+
+el('resetVBtn').addEventListener('click', () => {
+  const ts = textSize();
+  state.pos = { ...state.pos, y: clamp(SCREEN_H/2 - ts.h/2, SCREEN_H) };
   render();
 });
 
@@ -357,7 +567,7 @@ window.addEventListener('mouseup', () => { dragging = false; render(); });
 FAMILIES.forEach(f => {
   const opt = document.createElement('option');
   opt.value = f.base;
-  opt.textContent = `${f.w}×${f.h}px`;
+  opt.textContent = `${f.w}×${f.h}px` + (f.hebrewExcluded ? ' (X)' : '');
   el('fontSelect').appendChild(opt);
 });
 el('fontSelect').value = state.familyBase;
