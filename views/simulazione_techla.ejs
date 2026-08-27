@@ -1,0 +1,787 @@
+<%- include('partials/header', { pageTitle: 'Calcolatore Coordinate Techla' }) %>
+<style>
+  :root { --bg:#0d2b33; --panel:#0a1f26; --border:#235057; --accent:#ffb37a; --dim:#7fb8bd; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:#eaf3f3; font-family:system-ui,sans-serif;
+         display:flex; flex-wrap:wrap; gap:28px; padding:2px 24px 8px; justify-content:center; }
+  .screenWrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .screenLabel { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); }
+  #screen { position:relative; width:384px; height:683px; background:var(--panel);
+            border:3px solid #1e4a52; overflow:hidden;
+            box-shadow:0 20px 50px rgba(0,0,0,0.45); }
+  #dragText { position:absolute; display:flex; align-items:center; justify-content:flex-start;
+              color:#fff; font-family:monospace; white-space:nowrap; overflow:hidden;
+              cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:content-box;
+              padding:5px; z-index:2; }
+  #dragTextInner { display:inline-block; transform-origin: left center; letter-spacing:4.5px; }
+  #dragIcon { z-index:1; }
+  #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
+  .panel { width:340px; display:flex; flex-direction:column; gap:16px; }
+  h1 { font-size:22px; font-weight:700; margin:0; }
+  .sub { font-size:13px; color:#9cc9cd; margin-top:4px; }
+  label.field { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--dim); }
+  input[type=text], select { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+         padding:8px 10px; color:#fff; font-size:14px; }
+  .checkboxRow { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+  #boldCk:disabled { cursor:not-allowed; }
+  .colorRow { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--dim); }
+  .tooltip { position:absolute; top:calc(100% + 8px); left:0; width:300px; z-index:10;
+         background:#123840; border:1px solid #2d6069; border-radius:8px; padding:10px 12px;
+         font-size:12.5px; line-height:1.5; color:#eaf3f3; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+         display:none; }
+  button.reset { background:#1e4a52; border:1px solid #2d6069; border-radius:8px; padding:9px 12px;
+         color:#eaf3f3; font-size:13px; cursor:pointer; text-align:left; }
+  .infoPanel { width:180px; }
+  .readout { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px;
+         display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:13px; }
+  .readout .row { display:flex; justify-content:space-between; }
+  .readout .row span:first-child { color:var(--dim); }
+  .readout .val { color:var(--accent); font-weight:700; }
+  .divider { height:1px; background:var(--border); margin:4px 0; }
+  .lines { background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .lineRow { display:flex; align-items:center; justify-content:space-between; padding:8px 14px;
+         font-family:monospace; font-size:12.5px; cursor:pointer; border-top:1px solid #16333a; }
+  .lineRow:first-child { border-top:none; }
+  .lineRow:hover { background:#123840; }
+  .copyHint { font-size:11px; color:var(--dim); opacity:0; transition:opacity .1s; }
+  .lineRow:hover .copyHint { opacity:1; }
+  button.copyAll { background:var(--accent); border:none; border-radius:8px; padding:10px 12px;
+         color:#0a1f26; font-weight:700; font-size:13px; cursor:pointer; }
+</style>
+
+  <p style="width:100%;text-align:center;margin:0;">
+    <a href="/" style="text-decoration:none;color:#ffb454;">&larr; Torna alla home</a>
+  </p>
+
+  <div class="infoPanel">
+    <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--dim); margin-bottom:10px;">
+      Elemento attivo: <span id="activeElementLabel" style="color:var(--accent); text-transform:none; letter-spacing:normal;">Testo</span>
+    </div>
+    <div class="readout">
+      <div class="row"><span>larghezza (px)</span><span id="outW">-</span></div>
+      <div class="row"><span>metà larghezza (px)</span><span id="outHalfW">-</span></div>
+      <div class="divider"></div>
+      <div class="row"><span>altezza (px)</span><span id="outH">-</span></div>
+      <div class="row"><span>metà altezza (px)</span><span id="outHalfH">-</span></div>
+    </div>
+  </div>
+
+  <div class="screenWrap">
+    <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
+    <div id="screen">
+      <div id="dragText"><span id="dragTextInner">Christopher</span></div>
+      <img id="dragIcon" style="position:absolute; display:none; cursor:grab; user-select:none; -webkit-user-drag:none;">
+    </div>
+    <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
+  </div>
+
+  <div class="panel">
+    <label class="field">
+      <span>Testo</span>
+      <input type="text" id="textInput" value="Christopher">
+    </label>
+
+    <label class="field">
+      <span>Dimensione (famiglia font)</span>
+      <select id="fontSelect"></select>
+    </label>
+
+    <div style="display:flex; gap:16px;">
+      <label class="checkboxRow" style="width:130px;"><input type="checkbox" id="coprenteCk" checked> Coprente</label>
+      <label class="checkboxRow"><input type="checkbox" id="transparentCk"> Trasparente</label>
+    </div>
+
+    <div style="position:relative;display:flex;gap:16px;">
+      <label class="checkboxRow" id="nonPermLabel" style="width:130px;">
+        <input type="checkbox" id="nonPermCk" checked> Non permanente
+      </label>
+      <label class="checkboxRow" id="permLabel">
+        <input type="checkbox" id="permCk"> Permanente
+      </label>
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <label class="checkboxRow" id="boldRow">
+      <input type="checkbox" id="boldCk">
+      <span id="boldLabel">Bold</span>
+      <span id="boldDisabledNote" style="display:none; color:#ff6b6b; font-size:12px;">Troppo piccolo per bold</span>
+      <span id="numbersOnlyNote" style="display:none; font-size:12px; color:var(--dim);">solo per numeri</span>
+    </label>
+
+    <label class="colorRow" id="colorRow">
+      <span>Colore paper (sfondo dietro al testo)</span>
+      <input type="color" id="paperColor" value="#0d2b6b">
+    </label>
+
+    <button class="reset" id="resetHBtn">Reset — solo orizzontale</button>
+    <button class="reset" id="resetVBtn">Reset — solo verticale</button>
+
+    <div id="bgPicker" style="margin-top:12px;">
+      <div style="font-size:13px; color:var(--dim); margin-bottom:8px;">Scegli sfondo Techla</div>
+      <div style="display:flex; gap:8px;">
+        <input type="file" id="bgFileInput" accept="image/*" style="flex:1; padding:8px; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:13px;">
+        <button type="button" class="reset" id="bgResetBtn" style="margin-top:0; width:auto;">Reset</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; position:relative;">
+      <button type="button" id="iconToggleBtn" style="width:100%; padding:11px 12px; background:var(--panel);
+              border:1px solid var(--border); border-radius:8px; color:#eaf3f3; font-size:14px;
+              cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
+        <span>Icone Techla</span>
+        <span id="iconToggleArrow">&#9660;</span>
+      </button>
+      <div id="iconPanel" style="display:none; position:absolute; z-index:20; top:calc(100% + 6px); left:0; right:0;
+              max-height:320px; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
+              border-radius:8px; padding:10px; box-shadow:0 12px 30px rgba(0,0,0,0.5);
+              grid-template-columns:repeat(4, 1fr); gap:10px;">
+      </div>
+    </div>
+
+    <div class="lines" id="lines">
+      <div class="lineRow" id="lineRow-icon" data-text="" style="display:none;">
+        <span class="lineText" id="lineText-icon">icon <span id="editIcon" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">1001</span></span>
+        <span class="copyHint" id="copyHint-icon">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-icongcursor" data-text="" style="display:none;">
+        <span class="lineText" id="lineText-icongcursor">gcursor <span id="editIconX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span>,<span id="editIconY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span></span>
+        <span class="copyHint" id="copyHint-icongcursor">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-font" data-text="">
+        <span class="lineText" id="lineText-font">font <span id="editFont" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">13</span></span>
+        <span class="copyHint" id="copyHint-font">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-gcursor" data-text="">
+        <span class="lineText" id="lineText-gcursor">gcursor <span id="editX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span>,<span id="editY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span></span>
+        <span class="copyHint" id="copyHint-gcursor">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-print" data-text="">
+        <span class="lineText" id="lineText-print"></span>
+        <span class="copyHint" id="copyHint-print">copia</span>
+      </div>
+    </div>
+
+    <button class="copyAll" id="copyAllBtn">Copia il codice PLC</button>
+  </div>
+
+<script>
+// ============================================================
+// Stato: in React era useState(...). Qui sono solo variabili JS
+// normali — nessuna differenza di fondo, cambia solo CHI si
+// occupa di "ridisegnare" quando cambiano.
+// ============================================================
+const SCREEN_W = 768, SCREEN_H = 1366;
+const SCALE = 384 / SCREEN_W; // stessa idea dello "scale" in App.jsx, qui fisso per semplicità
+
+const FAMILIES = [
+  { base:0,  w:12,  h:16,  hebrewExcluded:false },
+  { base:1,  w:6,   h:10,  hebrewExcluded:true  },
+  { base:5,  w:8,   h:13,  hebrewExcluded:false },
+  { base:13, w:24,  h:32,  hebrewExcluded:false },
+  { base:17, w:36,  h:48,  hebrewExcluded:false },
+  { base:21, w:48,  h:64,  hebrewExcluded:false },
+  { base:33, w:60,  h:80,  hebrewExcluded:true  },
+  { base:37, w:72,  h:96,  hebrewExcluded:true  },
+  { base:41, w:84,  h:112, hebrewExcluded:true  },
+  { base:45, w:96,  h:128, hebrewExcluded:true  },
+  { base:49, w:108, h:144, hebrewExcluded:true  },
+  { base:53, w:16,  h:24,  hebrewExcluded:false },
+  { base:57, w:18,  h:24,  hebrewExcluded:true  },
+  { base:61, w:4,   h:6,   hebrewExcluded:true  },
+  { base:65, w:16,  h:26,  hebrewExcluded:true  },
+  { base:69, w:32,  h:48,  hebrewExcluded:false },
+].sort((a,b) => a.w*a.h - b.w*b.h);
+
+let state = {
+  text: "Christopher",
+  familyBase: 13,
+  transparent: false,
+  permanent: false,
+  bold: false,
+  pos: { x: 200, y: 650 },
+  paperColor: "#0d2b6b",
+  icon: { visible: false, num: null, pos: { x: 100, y: 100 }, naturalW: 40, naturalH: 40 },
+};
+let dragging = false;
+let activeElement = 'text'; // 'text' | 'icon' — decide su cosa agiscono i bottoni Reset
+let dragOffset = { dx:0, dy:0 };
+let iconDragging = false;
+let iconDragOffset = { dx:0, dy:0 };
+let copiedLineKey = null;
+let allJustCopied = false;
+const el = id => document.getElementById(id);
+const family = () => FAMILIES.find(f => f.base === state.familyBase);
+const fontId = () => family().base + (state.transparent ? 2 : 0) + (state.permanent ? 1 : 0) + (state.bold ? 100 : 0);
+
+// Scompone un numero di font digitato a mano nei suoi componenti reali
+// (famiglia, trasparente, bold), così può aggiornare lo STATO VERO invece
+// di essere solo un numero "finto" scollegato da dropdown/simulazione.
+// Ritorna null se il numero non corrisponde a nessuna combinazione valida.
+function decomposeFontId(num) {
+  // Soglia Bold: 101-172 = Bold acceso, sotto = Bold spento (come richiesto).
+  const bold = num >= 101;
+  const withoutBold = bold ? num - 100 : num;
+  for (const f of FAMILIES) {
+    const diff = withoutBold - f.base;
+    // Ogni famiglia occupa un blocco di 4 numeri: base(coprente),
+    // base+1(coprente permanente), base+2(trasparente), base+3(trasparente
+    // permanente). Il "permanente" non è esposto in UI, quindi 0/1 diventano
+    // coprente, 2/3 diventano trasparente — accetto l'intero blocco, non
+    // solo i due valori esatti 0 e 2 come prima (troppo restrittivo).
+    if (diff >= 0 && diff <= 3) {
+      const boldNotAvailable = (f.base === 0 || f.base === 1);
+      if (bold && boldNotAvailable) return null; // stessa regola della checkbox Bold disabilitata
+      return {
+        familyBase: f.base,
+        transparent: diff === 2 || diff === 3,
+        permanent: diff === 1 || diff === 3,
+        bold,
+      };
+    }
+  }
+  return null;
+}
+const textSize = () => {
+  const f = family();
+  const chars = state.text.length || 1;
+  return { w: f.w * chars, h: f.h };
+};
+const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
+
+// Misura la larghezza REALE con cui il browser renderizzerebbe il testo,
+// con un dato font/dimensione — serve per calcolare di quanto stirarlo
+// (scaleX) per farlo combaciare esattamente con la larghezza del riquadro,
+// sia a sinistra che a destra.
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d');
+function measureTextWidth(text, fontCss) {
+  measureCtx.font = fontCss;
+  return measureCtx.measureText(text).width;
+}
+
+// navigator.clipboard.writeText richiede un contesto "sicuro" (HTTPS o
+// esattamente "localhost") — se manca, fallisce silenziosamente senza
+// nessun errore visibile. Questo fallback usa un vecchio metodo (una
+// textarea nascosta + execCommand) che funziona quasi ovunque, come
+// riserva quando l'API moderna non è disponibile o fallisce.
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return fallbackCopy(text);
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } catch (err) {
+    console.error('Copia negli appunti fallita:', err);
+  }
+  document.body.removeChild(textarea);
+}
+
+// ============================================================
+// LA PARTE CHE IN REACT ERA "GRATIS": qui la scriviamo a mano.
+// Ogni volta che qualcosa cambia, richiamiamo NOI stessi render()
+// per tenere tutta la UI sincronizzata con lo stato.
+// ============================================================
+function render() {
+  const f = family();
+  const ts = textSize();
+
+  // Regola 1: Bold non disponibile per i font 12x16 e 6x10 — la checkbox
+  // resta visibile ma disabilitata (non cliccabile), "Bold" diventa rosso
+  // e barrato, con una nota a sinistra che spiega il motivo.
+  const boldNotAvailable = (f.base === 0 || f.base === 1);
+  el('boldCk').disabled = boldNotAvailable;
+  el('boldDisabledNote').style.display = boldNotAvailable ? 'inline' : 'none';
+  el('boldLabel').style.color = boldNotAvailable ? '#ff6b6b' : '';
+  el('boldLabel').style.textDecoration = boldNotAvailable ? 'line-through' : 'none';
+  if (boldNotAvailable && state.bold) {
+    state.bold = false;
+    el('boldCk').checked = false;
+  }
+
+  // Regola 2: "solo per numeri" compare SOLO se il font 4x6 (base 61) è
+  // selezionato E Bold è spuntato — sparisce cambiando font o togliendo Bold.
+  const showNumbersOnlyNote = (f.base === 61 && state.bold);
+  el('numbersOnlyNote').style.display = showNumbersOnlyNote ? 'inline' : 'none';
+
+  // --- testo trascinabile ---
+  const dragEl = el('dragText');
+  const dragInner = el('dragTextInner');
+  const boxWidthPx = ts.w * SCALE;
+  const boxHeightPx = ts.h * SCALE;
+  const fontWeight = state.bold ? '700' : '400';
+
+  dragInner.textContent = state.text || ' ';
+  dragEl.style.left = (state.pos.x * SCALE) + 'px';
+  dragEl.style.top = (state.pos.y * SCALE) + 'px';
+  dragEl.style.width = boxWidthPx + 'px';
+  dragEl.style.height = boxHeightPx + 'px';
+  dragEl.style.background = state.transparent ? 'transparent' : state.paperColor;
+  dragInner.style.fontWeight = fontWeight;
+  dragInner.style.fontFamily = 'monospace';
+  dragInner.style.transform = 'none'; // nessuna deformazione
+  dragEl.classList.toggle('dragging', dragging);
+
+  // --- icona trascinabile ---
+  const iconEl = el('dragIcon');
+  if (state.icon.visible) {
+    iconEl.style.display = 'block';
+    iconEl.style.left = (state.icon.pos.x * SCALE) + 'px';
+    iconEl.style.top = (state.icon.pos.y * SCALE) + 'px';
+    iconEl.style.width = (state.icon.naturalW * SCALE) + 'px';
+    iconEl.style.height = (state.icon.naturalH * SCALE) + 'px';
+  } else {
+    iconEl.style.display = 'none';
+  }
+
+  try {
+    // Dimensione derivata dalla LARGHEZZA (non più dall'altezza): stimo
+    // una dimensione di prova, misuro la larghezza reale ottenuta, e
+    // correggo proporzionalmente in un solo passaggio — i font scalano
+    // linearmente, quindi il risultato combacia quasi esattamente con
+    // boxWidthPx, senza bisogno di margini artificiali sottratti prima.
+    const charCountForSpacing = Math.max(0, (state.text || ' ').length - 1);
+    const letterSpacingTotal = charCountForSpacing * 4.5; // deve combaciare col CSS
+    const targetGlyphWidth = Math.max(1, boxWidthPx - letterSpacingTotal);
+
+    const trialSize = f.h * SCALE * 0.65;
+    measureCtx.font = `${fontWeight} ${trialSize}px monospace`;
+    const trialWidth = measureCtx.measureText(state.text || ' ').width;
+    const fontSize = trialWidth > 0 ? trialSize * (targetGlyphWidth / trialWidth) : trialSize;
+
+    measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
+    const actualGlyphWidth = measureCtx.measureText(state.text || ' ').width;
+    const actualWidth = actualGlyphWidth + letterSpacingTotal; // larghezza vera, spaziatura inclusa
+
+    dragInner.style.fontSize = fontSize + 'px';
+    // Centro in base alla larghezza reale (glifi + letter-spacing) — il
+    // margine risultante è vicino a zero per costruzione.
+    dragInner.style.marginLeft = Math.max(0, (boxWidthPx - actualWidth) / 2) + 'px';
+    dragInner.style.marginTop = '0';
+    dragInner.style.marginBottom = '0';
+  } catch (err) {
+    // Un errore qui NON deve bloccare il resto di render() — in particolare
+    // le righe copiabili più sotto devono ricostruirsi comunque, anche se
+    // l'anteprima del testo restasse imprecisa per qualche caso limite.
+    console.error('Errore nel calcolo dimensione testo (il resto continua comunque):', err);
+  }
+
+  // --- puntino del gcursor ---
+
+  // --- QUESTO è il punto che in React era "automatico":
+  //     mostra/nascondi il selettore colore in base a "transparent".
+  //     Qui dobbiamo ricordarci NOI di farlo, ogni volta. ---
+  el('colorRow').style.visibility = state.transparent ? 'hidden' : 'visible';
+
+  // --- riquadro numeri ---
+  // Il pannello info a sinistra mostra le misure dell'ELEMENTO ATTIVO
+  // (testo o icona), non più sempre e solo il testo.
+  const activeW = activeElement === 'icon' ? state.icon.naturalW : ts.w;
+  const activeH = activeElement === 'icon' ? state.icon.naturalH : ts.h;
+  el('activeElementLabel').textContent = activeElement === 'icon' ? 'Icona' : 'Testo';
+  el('outW').textContent = activeW;
+  el('outH').textContent = activeH;
+  el('outHalfW').textContent = (activeW / 2).toFixed(1);
+  el('outHalfH').textContent = (activeH / 2).toFixed(1);
+  const activeLabel = activeElement === 'icon' ? 'icona' : 'testo';
+  el('resetHBtn').textContent = `Reset ${activeLabel} — solo orizzontale`;
+  el('resetVBtn').textContent = `Reset ${activeLabel} — solo verticale`;
+
+  // --- le 3 righe di codice copiabili ---
+  const lines = [
+    { key:'icon',    text:`icon ${1000 + (state.icon.num || 1)}` },
+    { key:'icongcursor', text:`gcursor ${state.icon.pos.x},${state.icon.pos.y}` },
+    { key:'font',    text:`font ${fontId()}` },
+    { key:'gcursor', text:`gcursor ${state.pos.x},${state.pos.y}` },
+    { key:'print',   text:`print "${state.text}"` },
+  ];
+  // Le 3 righe esistono già nell'HTML, create una volta sola — qui mi
+  // limito ad AGGIORNARE i loro valori, senza mai ricrearle. Così un
+  // click su di loro (assegnato una volta, fuori da render()) funziona
+  // esattamente come per un bottone fisso.
+  lines.forEach(l => {
+    el(`lineRow-${l.key}`).dataset.text = l.text;
+    const textEl = el(`lineText-${l.key}`);
+    if (l.key === 'icon') {
+      el('lineRow-icon').style.display = state.icon.visible ? 'flex' : 'none';
+      if (document.activeElement !== el('editIcon')) el('editIcon').textContent = 1000 + (state.icon.num || 1);
+    } else if (l.key === 'icongcursor') {
+      el('lineRow-icongcursor').style.display = state.icon.visible ? 'flex' : 'none';
+      if (document.activeElement !== el('editIconX')) el('editIconX').textContent = state.icon.pos.x;
+      if (document.activeElement !== el('editIconY')) el('editIconY').textContent = state.icon.pos.y;
+    } else if (l.key === 'font') {
+      if (document.activeElement !== el('editFont')) el('editFont').textContent = fontId();
+    } else if (l.key === 'gcursor') {
+      // Non sovrascrivo tutto il testo (distruggerebbe editX/editY):
+      // aggiorno solo i due numeri interni, gli span restano gli stessi.
+      // Non aggiorno mentre l'utente sta scrivendo dentro (altrimenti un
+      // render() scattato per un altro motivo interromperebbe la modifica
+      // in corso, cancellando quello che stava digitando).
+      if (document.activeElement !== el('editX')) el('editX').textContent = state.pos.x;
+      if (document.activeElement !== el('editY')) el('editY').textContent = state.pos.y;
+    } else {
+      textEl.textContent = l.text;
+    }
+    const isCopied = copiedLineKey === l.key || allJustCopied;
+    textEl.style.color = isCopied ? '#8de3a0' : '#eaf3f3';
+    el(`copyHint-${l.key}`).textContent = isCopied ? 'copiato' : 'copia';
+  });
+}
+
+// ============================================================
+// Eventi — qui il conteggio onesto: sono tanti quanti in React,
+// solo che ognuno chiama render() a mano invece che essere
+// "collegato" automaticamente al JSX.
+// ============================================================
+el('textInput').addEventListener('input', e => { state.text = e.target.value; render(); });
+el('fontSelect').addEventListener('change', e => { state.familyBase = Number(e.target.value); render(); });
+el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; el('coprenteCk').checked = !e.target.checked; render(); });
+el('coprenteCk').addEventListener('change', e => { state.transparent = !e.target.checked; el('transparentCk').checked = !e.target.checked; render(); });
+el('boldCk').addEventListener('change', e => { state.bold = e.target.checked; render(); });
+el('paperColor').addEventListener('input', e => { state.paperColor = e.target.value; render(); });
+
+el('bgFileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const screenEl2 = el('screen');
+  screenEl2.style.backgroundImage = `url(${url})`;
+  screenEl2.style.backgroundSize = 'cover';
+  screenEl2.style.backgroundPosition = 'center';
+});
+
+el('bgResetBtn').addEventListener('click', () => {
+  el('screen').style.backgroundImage = 'none';
+  el('bgFileInput').value = '';
+});
+
+// --- Selettore icone Techla (Immagine1.bmp...Immagine214.bmp in public/imgs) ---
+const ICON_COUNT = 214;
+const iconPanel = el('iconPanel');
+
+// Popolo la tendina una volta sola: ogni cella mostra l'icona e, sotto,
+// il SUO codice Techla reale (icon 100N), non il numero del file.
+for (let n = 1; n <= ICON_COUNT; n++) {
+  const techlaCode = 1000 + n;
+  const cell = document.createElement('div');
+  cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:6px;border-radius:6px;';
+  cell.addEventListener('mouseenter', () => cell.style.background = '#123840');
+  cell.addEventListener('mouseleave', () => cell.style.background = 'transparent');
+
+  const img = document.createElement('img');
+  img.src = `imgs/Immagine${n}.bmp`;
+  img.alt = String(techlaCode);
+  img.style.cssText = 'width:40px;height:40px;object-fit:contain;image-rendering:pixelated;background:#0a1f26;border:1px solid var(--border);border-radius:4px;';
+
+  const label = document.createElement('div');
+  label.textContent = techlaCode;
+  label.style.cssText = 'font-size:11px;color:var(--dim);font-family:monospace;';
+
+  cell.appendChild(img);
+  cell.appendChild(label);
+  cell.addEventListener('click', () => {
+    // Uso le dimensioni NATURALI vere dell'immagine appena caricata,
+    // così l'icona a schermo ha le proporzioni corrette.
+    const naturalW = img.naturalWidth || 40;
+    const naturalH = img.naturalHeight || 40;
+
+    // Calcolo il PUNTO MEDIO dell'icona attuale (se ce n'era una), e
+    // riposiziono la nuova icona in modo che il SUO punto medio coincida
+    // con lo stesso punto — così resta "nello stesso posto" visivamente,
+    // ma gcursor (l'angolo) cambia correttamente in base alla nuova
+    // dimensione, invece di restare sempre lo stesso numero.
+    const oldCenterX = state.icon.pos.x + state.icon.naturalW / 2;
+    const oldCenterY = state.icon.pos.y + state.icon.naturalH / 2;
+    const newX = clamp(oldCenterX - naturalW / 2, SCREEN_W);
+    const newY = clamp(oldCenterY - naturalH / 2, SCREEN_H);
+
+    state.icon = {
+      visible: true,
+      num: n,
+      pos: { x: newX, y: newY },
+      naturalW, naturalH,
+    };
+    el('dragIcon').src = img.src;
+    iconPanel.style.display = 'none';
+    el('iconToggleArrow').innerHTML = '&#9660;';
+    render();
+  });
+  iconPanel.appendChild(cell);
+}
+iconPanel.style.display = 'none';
+// il display grid va riapplicato ogni volta che lo si mostra, dato che lo
+// nascondo con display:none (che sovrascriverebbe "grid" se lo lasciassi lì)
+function showIconPanel(show) {
+  iconPanel.style.display = show ? 'grid' : 'none';
+  el('iconToggleArrow').innerHTML = show ? '&#9650;' : '&#9660;';
+}
+el('iconToggleBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  showIconPanel(iconPanel.style.display !== 'grid');
+});
+document.addEventListener('click', (e) => {
+  if (iconPanel.style.display === 'grid' && !iconPanel.contains(e.target) && e.target.id !== 'iconToggleBtn') {
+    showIconPanel(false);
+  }
+});
+
+// Trascinamento dell'icona: stessa identica logica del testo, ma su un
+// elemento e uno stato separati (state.icon.pos invece di state.pos).
+const dragIconEl = el('dragIcon');
+dragIconEl.addEventListener('mousedown', e => {
+  e.preventDefault();
+  activeElement = 'icon';
+  const rect = screenEl.getBoundingClientRect();
+  iconDragOffset.dx = e.clientX - (rect.left + state.icon.pos.x * SCALE);
+  iconDragOffset.dy = e.clientY - (rect.top + state.icon.pos.y * SCALE);
+  iconDragging = true;
+  render();
+});
+dragIconEl.addEventListener('touchstart', e => {
+  activeElement = 'icon';
+  const t = e.touches[0];
+  const rect = screenEl.getBoundingClientRect();
+  iconDragOffset.dx = t.clientX - (rect.left + state.icon.pos.x * SCALE);
+  iconDragOffset.dy = t.clientY - (rect.top + state.icon.pos.y * SCALE);
+  iconDragging = true;
+  render();
+});
+window.addEventListener('mousemove', e => {
+  if (!iconDragging) return;
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (e.clientX - iconDragOffset.dx - rect.left) / SCALE;
+  const rawY = (e.clientY - iconDragOffset.dy - rect.top) / SCALE;
+  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('touchmove', e => {
+  if (!iconDragging) return;
+  const t = e.touches[0];
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (t.clientX - iconDragOffset.dx - rect.left) / SCALE;
+  const rawY = (t.clientY - iconDragOffset.dy - rect.top) / SCALE;
+  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('mouseup', () => { iconDragging = false; });
+window.addEventListener('touchend', () => { iconDragging = false; });
+
+
+// Click sulle righe di codice: qui NON serve più la delega, perché le
+// righe non vengono più ricreate — esistono fin dall'inizio, esattamente
+// come i bottoni. Assegno un listener diretto a ciascuna, una volta sola.
+['icon', 'icongcursor', 'font', 'gcursor', 'print'].forEach(key => {
+  el(`lineRow-${key}`).addEventListener('click', () => {
+    const text = el(`lineRow-${key}`).dataset.text;
+    copyToClipboard(text);
+    copiedLineKey = key;
+    render();
+    setTimeout(() => { copiedLineKey = null; render(); }, 1200);
+  });
+});
+
+// Click su X o Y: impedisce che scatti ANCHE la copia dell'intera riga
+// (stopPropagation), permettendo di scrivere direttamente nello span
+// (contenteditable="true" nell'HTML). La modifica si conferma con Invio
+// o uscendo dal campo (blur); Esc annulla e ripristina il valore attuale.
+function commitEdit(spanId, posObj, axis, maxVal) {
+  const span = el(spanId);
+  const num = parseInt(span.textContent, 10);
+  if (!isNaN(num)) {
+    posObj[axis] = clamp(num, maxVal);
+  }
+  render(); // ripristina comunque il testo (corregge input non validi)
+}
+
+[['editX','x','pos'], ['editY','y','pos'], ['editIconX','x','icon'], ['editIconY','y','icon']].forEach(([id, axis, target]) => {
+  const span = el(id);
+  const maxVal = axis === 'x' ? SCREEN_W : SCREEN_H;
+
+  span.addEventListener('mousedown', e => e.stopPropagation());
+  span.addEventListener('click', e => e.stopPropagation());
+
+  span.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      span.blur(); // fa scattare il blur qui sotto, che salva
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      render(); // ripristina il valore attuale, annullando la modifica
+      span.blur();
+    }
+  });
+
+  // Risolvo l'oggetto posizione ADESSO, al momento del blur — non
+  // in anticipo — perché state.icon viene riassegnato per intero
+  // quando scegli un'icona dalla tendina (un riferimento catturato
+  // prima punterebbe a un oggetto ormai abbandonato).
+  span.addEventListener('blur', () => {
+    const posObj = target === 'pos' ? state.pos : state.icon.pos;
+    commitEdit(id, posObj, axis, maxVal);
+  });
+});
+
+// Stessa logica per il numero di font, con doppia validazione: deve
+// essere 0-172 E corrispondere a una vera combinazione famiglia+
+// trasparente+bold (decomposeFontId). Se non valido, richiamando
+// render() senza aver toccato lo stato, il campo torna a mostrare il
+// numero di prima — che sia calcolato o l'ultimo scritto valido.
+// Stessa logica per il numero dell'icona: 1001-(1000+ICON_COUNT) valido,
+// altrimenti torna al numero precedente. Se valido, ricarico anche
+// l'immagine giusta e ne rimisuro le dimensioni naturali.
+const editIconSpan = el('editIcon');
+editIconSpan.addEventListener('mousedown', e => e.stopPropagation());
+editIconSpan.addEventListener('click', e => e.stopPropagation());
+editIconSpan.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); editIconSpan.blur(); }
+  else if (e.key === 'Escape') { e.preventDefault(); render(); editIconSpan.blur(); }
+});
+editIconSpan.addEventListener('blur', () => {
+  const num = parseInt(editIconSpan.textContent, 10);
+  const minCode = 1001, maxCode = 1000 + ICON_COUNT;
+  if (!isNaN(num) && num >= minCode && num <= maxCode) {
+    const n = num - 1000;
+    state.icon.num = n;
+    const img = new Image();
+    img.onload = () => {
+      state.icon.naturalW = img.naturalWidth || state.icon.naturalW;
+      state.icon.naturalH = img.naturalHeight || state.icon.naturalH;
+      render();
+    };
+    img.src = `imgs/Immagine${n}.bmp`;
+    el('dragIcon').src = img.src;
+  }
+  // fuori range o non numerico: non tocco lo stato, render() ripristina
+  render();
+});
+
+const editFontSpan = el('editFont');
+editFontSpan.addEventListener('mousedown', e => e.stopPropagation());
+editFontSpan.addEventListener('click', e => e.stopPropagation());
+
+editFontSpan.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    editFontSpan.blur();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    render();
+    editFontSpan.blur();
+  }
+});
+
+editFontSpan.addEventListener('blur', () => {
+  const num = parseInt(editFontSpan.textContent, 10);
+  if (!isNaN(num) && num >= 0 && num <= 172) {
+    const decomposed = decomposeFontId(num);
+    if (decomposed) {
+      // Aggiorno lo STATO VERO — questo è ciò che fa aggiornare anche
+      // la simulazione a schermo, non solo il numero scritto.
+      state.familyBase = decomposed.familyBase;
+      state.transparent = decomposed.transparent;
+      state.permanent = decomposed.permanent;
+      state.bold = decomposed.bold;
+      // Sincronizzo anche i controlli visivi, così mostrano la stessa scelta.
+      el('fontSelect').value = decomposed.familyBase;
+      el('transparentCk').checked = decomposed.transparent;
+      el('coprenteCk').checked = !decomposed.transparent;
+      el('permCk').checked = decomposed.permanent;
+      el('nonPermCk').checked = !decomposed.permanent;
+      el('boldCk').checked = decomposed.bold;
+    }
+    // se decomposed è null (numero valido ma non corrisponde a nessun
+    // font reale), non tocco lo stato — render() sotto ripristina il
+    // numero precedente, esattamente come per un numero fuori range.
+  }
+  render();
+});
+
+
+const TOOLTIP_TEXT = {
+  permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
+  nonpermanente: "Non permanente: l'elemento non viene ritracciato automaticamente; se la finestra viene coperta e poi riscoperta, quella parte di testo o grafica sparisce (a meno che non venga ridisegnata esplicitamente dal programma).",
+};
+
+el('nonPermCk').addEventListener('change', () => { state.permanent = false; el('permCk').checked = false; render(); });
+el('permCk').addEventListener('change', () => { state.permanent = true; el('nonPermCk').checked = false; render(); });
+
+function showTooltip(key) { el('tooltip').textContent = TOOLTIP_TEXT[key]; el('tooltip').style.display = 'block'; }
+function hideTooltip() { el('tooltip').style.display = 'none'; }
+el('nonPermLabel').addEventListener('mouseenter', () => showTooltip('nonpermanente'));
+el('nonPermLabel').addEventListener('mouseleave', hideTooltip);
+el('permLabel').addEventListener('mouseenter', () => showTooltip('permanente'));
+el('permLabel').addEventListener('mouseleave', hideTooltip);
+
+el('resetHBtn').addEventListener('click', () => {
+  if (activeElement === 'icon') {
+    state.icon.pos = { ...state.icon.pos, x: clamp(SCREEN_W/2 - state.icon.naturalW/2, SCREEN_W) };
+  } else {
+    const ts = textSize();
+    state.pos = { ...state.pos, x: clamp(SCREEN_W/2 - ts.w/2, SCREEN_W) };
+  }
+  render();
+});
+
+el('resetVBtn').addEventListener('click', () => {
+  if (activeElement === 'icon') {
+    state.icon.pos = { ...state.icon.pos, y: clamp(SCREEN_H/2 - state.icon.naturalH/2, SCREEN_H) };
+  } else {
+    const ts = textSize();
+    state.pos = { ...state.pos, y: clamp(SCREEN_H/2 - ts.h/2, SCREEN_H) };
+  }
+  render();
+});
+
+el('copyAllBtn').addEventListener('click', () => {
+  const snippet = `font ${fontId()}\ngcursor ${state.pos.x},${state.pos.y}\nprint "${state.text}"`;
+  copyToClipboard(snippet);
+  const btn = el('copyAllBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Copiato!';
+  allJustCopied = true;
+  render();
+  setTimeout(() => { btn.textContent = original; allJustCopied = false; render(); }, 1200);
+});
+
+// drag: identico nello spirito al tuo /testo esistente
+const screenEl = el('screen');
+el('dragText').addEventListener('mousedown', e => {
+  e.preventDefault();
+  activeElement = 'text';
+  const rect = screenEl.getBoundingClientRect();
+  dragOffset.dx = e.clientX - (rect.left + state.pos.x * SCALE);
+  dragOffset.dy = e.clientY - (rect.top + state.pos.y * SCALE);
+  dragging = true;
+  render();
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (e.clientX - dragOffset.dx - rect.left) / SCALE;
+  const rawY = (e.clientY - dragOffset.dy - rect.top) / SCALE;
+  state.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('mouseup', () => { dragging = false; render(); });
+
+// init: popola il dropdown una volta sola
+FAMILIES.forEach(f => {
+  const opt = document.createElement('option');
+  opt.value = f.base;
+  opt.textContent = `${f.w}×${f.h}px` + (f.hebrewExcluded ? ' (X)' : '');
+  el('fontSelect').appendChild(opt);
+});
+el('fontSelect').value = state.familyBase;
+render();
+</script>
+<%- include('partials/footer') %>

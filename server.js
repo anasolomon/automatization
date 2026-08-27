@@ -43,15 +43,25 @@ const uploadImage = multer({
   limits: { fileSize: 30 * 1024 * 1024 } // 30 MB, un'immagine non ha bisogno di più
 });
 
-// express.static serve automaticamente TUTTI i file dentro public/:
-//   /                       -> public/index.html         (pagina con i 3 bottoni)
-//   /avi_converter.html     -> public/avi_converter.html  (convertitore video)
-//   /jpg_converter.html     -> public/jpg_converter.html  (convertitore immagini)
-//   /coordinate_testo.html  -> public/coordinate_testo.html (calcolatore coordinate)
-// Nessuna rotta esplicita serve per queste pagine: sono file statici,
-// non template da "renderizzare" — per quello servirebbe un view engine
-// (es. app.set('view engine','ejs')) che qui non è configurato.
+// Le 4 pagine ora sono template EJS in views/, servite tramite rotte
+// esplicite con res.render() (sotto). express.static resta comunque
+// necessario per i file VERAMENTE statici: css/style.css, imgs/*.bmp,
+// scripts/*.js — quelli sì vengono serviti automaticamente, senza rotta.
+app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+  res.render('index');
+});
+app.get('/avi_converter', (req, res) => {
+  res.render('avi_converter');
+});
+app.get('/jpg_converter', (req, res) => {
+  res.render('jpg_converter');
+});
+app.get('/simulazione_techla', (req, res) => {
+  res.render('simulazione_techla');
+});
 
 // --- L'endpoint vero e proprio ----------------------------------------
 app.post('/avi_converter', upload.single('video'), (req, res) => {

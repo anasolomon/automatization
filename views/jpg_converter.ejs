@@ -1,0 +1,318 @@
+<%- include('partials/header', { pageTitle: 'Convertitore Immagini per Techla' }) %>
+<style>
+  /* Stile specifico di questa pagina — il resto (variabili, form, bottoni)
+     è già in /css/style.css tramite la classe .formPage */
+  .hint { font-size: 13px; color: var(--dim); line-height: 1.5; margin-bottom: 8px; }
+  .hint code {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; font-size: 12px; color: var(--accent);
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #cropSection { display: none; margin-top: 18px; }
+  #cropHint { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+  #viewport {
+    position: relative; overflow: hidden; background: #ffffff;
+    border: 1px solid var(--border); border-radius: 8px;
+    margin: 0 auto; touch-action: none;
+  }
+  #dragImg {
+    position: absolute; top: 0; left: 0; user-select: none;
+    -webkit-user-drag: none;
+  }
+  #dragImg.crop-mode { cursor: grab; }
+  #dragImg.crop-mode.dragging { cursor: grabbing; }
+
+  .zoomRow { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .zoomRow input[type=range] { margin-top: 0; accent-color: var(--accent); }
+  .zoomRow span { font-size: 12px; color: var(--dim); width: 40px; text-align: right; }
+
+  #colorRow {
+    display: none; align-items: center; gap: 10px; margin-top: 12px;
+    font-size: 13px; color: var(--dim);
+  }
+  #colorRow input[type=color] {
+    width: 40px; height: 30px; padding: 2px; margin-top: 0; cursor: pointer;
+  }
+
+  #preview {
+    max-width: 100%; margin-top: 16px; border: 1px solid var(--border);
+    border-radius: 8px; display: none;
+  }
+</style>
+  <div class="formPage">
+    <a class="back" href="/">&larr; Torna alla home</a>
+    <h1>Convertitore Immagini &rarr; Techla</h1>
+    <p class="hint">
+      Ruota e ridimensiona correttamente per lo schermo Techla. Trascina l'immagine per scegliere
+      l'inquadratura, oppure riduci lo zoom per aggiungere una cornice di un colore a scelta.
+    </p>
+    <form id="form">
+      <label>File immagine (.jpg, .png)</label>
+      <input type="file" name="image" id="fileInput" accept="image/*" required>
+
+      <label>Rotazione</label>
+      <select name="rotation" id="rotationSelect">
+        <option value="-90">90° sinistra (predefinito)</option>
+        <option value="90">90° destra</option>
+        <option value="0">Nessuna</option>
+      </select>
+
+      <label>Larghezza finale</label>
+      <input type="number" name="width" id="widthInput" value="1366">
+
+      <label>Altezza finale</label>
+      <input type="number" name="height" id="heightInput" value="768">
+
+      <div id="cropSection">
+        <div id="cropHint">Trascina per posizionare, usa lo zoom per ingrandire o aggiungere una cornice</div>
+        <div id="viewport">
+          <img id="dragImg" alt="">
+        </div>
+
+        <div class="zoomRow">
+          <span id="zoomOutLabel">&minus;</span>
+          <input type="range" id="zoomSlider" min="0.3" max="3" step="0.02" value="1" style="flex:1;">
+          <span id="zoomValue">100%</span>
+        </div>
+
+        <div id="colorRow">
+          <span>Colore cornice</span>
+          <input type="color" id="borderColorInput" value="#ffffff">
+        </div>
+      </div>
+
+      <input type="hidden" name="mode" id="modeField" value="crop">
+      <input type="hidden" name="resize_w" id="resizeWField" value="0">
+      <input type="hidden" name="resize_h" id="resizeHField" value="0">
+      <input type="hidden" name="crop_x" id="cropXField" value="0">
+      <input type="hidden" name="crop_y" id="cropYField" value="0">
+      <input type="hidden" name="border_color" id="borderColorField" value="#ffffff">
+
+      <button type="submit" id="submitBtn" disabled>Carica un'immagine per continuare</button>
+    </form>
+    <div id="status"></div>
+    <img id="preview" alt="Anteprima risultato">
+  </div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const rotationSelect = document.getElementById('rotationSelect');
+const widthInput = document.getElementById('widthInput');
+const heightInput = document.getElementById('heightInput');
+const cropSection = document.getElementById('cropSection');
+const viewport = document.getElementById('viewport');
+const dragImg = document.getElementById('dragImg');
+const zoomSlider = document.getElementById('zoomSlider');
+const zoomValue = document.getElementById('zoomValue');
+const colorRow = document.getElementById('colorRow');
+const borderColorInput = document.getElementById('borderColorInput');
+const modeField = document.getElementById('modeField');
+const resizeWField = document.getElementById('resizeWField');
+const resizeHField = document.getElementById('resizeHField');
+const cropXField = document.getElementById('cropXField');
+const cropYField = document.getElementById('cropYField');
+const borderColorField = document.getElementById('borderColorField');
+const submitBtn = document.getElementById('submitBtn');
+
+const VIEWPORT_DISPLAY_W = 460; // larghezza fissa dell'anteprima a schermo, in px CSS
+
+let rotatedW = 0, rotatedH = 0;   // dimensioni dopo la rotazione scelta
+let coverScale = 1;               // scala che copre ESATTAMENTE il riquadro (zoom slider = 1.0)
+let scaledW = 0, scaledH = 0;     // dimensioni effettive = rotatedW/H * coverScale * zoom
+let displayScale = 1;
+let mode = 'crop';                // 'crop' (zoom>=1, trascinabile) | 'pad' (zoom<1, cornice)
+let offset = { x: 0, y: 0 };      // usato solo in modo 'crop'
+let dragging = false;
+let dragStart = { x: 0, y: 0, offX: 0, offY: 0 };
+
+// --- Passo 1: disegno l'immagine GIA' RUOTATA su un canvas nascosto,
+//     riempito di bianco prima, cosi' le zone trasparenti dei PNG
+//     coincidono con cosa fa "magick" davvero. ---
+function loadAndRotate() {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const rotation = parseInt(rotationSelect.value, 10);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (rotation === 90) {
+      canvas.width = img.naturalHeight;
+      canvas.height = img.naturalWidth;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.translate(canvas.width, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0);
+    } else if (rotation === -90) {
+      canvas.width = img.naturalHeight;
+      canvas.height = img.naturalWidth;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.translate(0, canvas.height);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(img, 0, 0);
+    } else {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    }
+
+    rotatedW = canvas.width;
+    rotatedH = canvas.height;
+    dragImg.src = canvas.toDataURL('image/jpeg', 0.92);
+    dragImg.onload = () => {
+      zoomSlider.value = 1;
+      setupViewport();
+    };
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+// --- Passo 2: applico zoom (slider) sopra la scala "a coprire", e decido
+//     se siamo in modo "crop" (zoom>=1, trascinabile) o "pad" (zoom<1,
+//     immagine rimpicciolita + cornice colorata). ---
+function setupViewport() {
+  const targetW = parseInt(widthInput.value, 10) || 1366;
+  const targetH = parseInt(heightInput.value, 10) || 768;
+  const zoom = parseFloat(zoomSlider.value);
+
+  coverScale = Math.max(targetW / rotatedW, targetH / rotatedH);
+  const effectiveScale = coverScale * zoom;
+  scaledW = rotatedW * effectiveScale;
+  scaledH = rotatedH * effectiveScale;
+
+  displayScale = VIEWPORT_DISPLAY_W / targetW;
+  const viewportDisplayH = targetH * displayScale;
+  viewport.style.width = VIEWPORT_DISPLAY_W + 'px';
+  viewport.style.height = viewportDisplayH + 'px';
+
+  dragImg.style.width = (scaledW * displayScale) + 'px';
+  dragImg.style.height = (scaledH * displayScale) + 'px';
+
+  zoomValue.textContent = Math.round(zoom * 100) + '%';
+
+  mode = zoom >= 1 ? 'crop' : 'pad';
+  modeField.value = mode;
+
+  if (mode === 'crop') {
+    dragImg.classList.add('crop-mode');
+    colorRow.style.display = 'none';
+    viewport.style.background = '#000';
+    // mantengo il centro attuale del ritaglio quando possibile, altrimenti ricentro
+    if (offset.x === 0 && offset.y === 0) {
+      offset.x = (scaledW - targetW) / 2;
+      offset.y = (scaledH - targetH) / 2;
+    }
+    clampOffset();
+    applyCropOffset();
+  } else {
+    dragImg.classList.remove('crop-mode');
+    colorRow.style.display = 'flex';
+    viewport.style.background = borderColorInput.value;
+    // immagine più piccola del riquadro: la centro, niente trascinamento
+    const leftPx = (VIEWPORT_DISPLAY_W - scaledW * displayScale) / 2;
+    const topPx = (viewportDisplayH - scaledH * displayScale) / 2;
+    dragImg.style.left = leftPx + 'px';
+    dragImg.style.top = topPx + 'px';
+  }
+
+  resizeWField.value = Math.round(scaledW);
+  resizeHField.value = Math.round(scaledH);
+
+  cropSection.style.display = 'block';
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Converti';
+}
+
+function clampOffset() {
+  const targetW = parseInt(widthInput.value, 10) || 1366;
+  const targetH = parseInt(heightInput.value, 10) || 768;
+  const maxX = Math.max(0, scaledW - targetW);
+  const maxY = Math.max(0, scaledH - targetH);
+  offset.x = Math.min(maxX, Math.max(0, offset.x));
+  offset.y = Math.min(maxY, Math.max(0, offset.y));
+}
+
+function applyCropOffset() {
+  dragImg.style.left = (-offset.x * displayScale) + 'px';
+  dragImg.style.top = (-offset.y * displayScale) + 'px';
+  cropXField.value = Math.round(offset.x);
+  cropYField.value = Math.round(offset.y);
+}
+
+// --- Trascinamento: attivo solo in modo 'crop' ---
+function startDrag(clientX, clientY) {
+  if (mode !== 'crop') return;
+  dragging = true;
+  dragImg.classList.add('dragging');
+  dragStart = { x: clientX, y: clientY, offX: offset.x, offY: offset.y };
+}
+function moveDrag(clientX, clientY) {
+  if (!dragging) return;
+  const dx = (clientX - dragStart.x) / displayScale;
+  const dy = (clientY - dragStart.y) / displayScale;
+  offset.x = dragStart.offX - dx;
+  offset.y = dragStart.offY - dy;
+  clampOffset();
+  applyCropOffset();
+}
+function endDrag() { dragging = false; dragImg.classList.remove('dragging'); }
+
+dragImg.addEventListener('mousedown', e => { e.preventDefault(); startDrag(e.clientX, e.clientY); });
+window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+window.addEventListener('mouseup', endDrag);
+dragImg.addEventListener('touchstart', e => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); });
+window.addEventListener('touchmove', e => { const t = e.touches[0]; moveDrag(t.clientX, t.clientY); });
+window.addEventListener('touchend', endDrag);
+
+// --- Zoom, colore cornice, cambi di rotazione/dimensioni ---
+zoomSlider.addEventListener('input', () => { if (rotatedW) setupViewport(); });
+borderColorInput.addEventListener('input', () => {
+  borderColorField.value = borderColorInput.value;
+  if (mode === 'pad') viewport.style.background = borderColorInput.value;
+});
+fileInput.addEventListener('change', () => { offset = {x:0,y:0}; loadAndRotate(); });
+rotationSelect.addEventListener('change', () => { if (fileInput.files[0]) loadAndRotate(); });
+widthInput.addEventListener('change', () => { if (rotatedW) setupViewport(); });
+heightInput.addEventListener('change', () => { if (rotatedH) setupViewport(); });
+
+// --- Invio del form ---
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('status');
+  const preview = document.getElementById('preview');
+  status.textContent = 'Conversione in corso...';
+  preview.style.display = 'none';
+
+  const formData = new FormData(e.target);
+
+  try {
+    const res = await fetch('/jpg_converter', { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json();
+      status.textContent = 'Errore: ' + (err.error || 'sconosciuto');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    preview.src = url;
+    preview.style.display = 'block';
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'immagine_techla.jpg';
+    a.click();
+    status.textContent = 'Fatto! Download avviato.';
+  } catch (err) {
+    status.textContent = 'Errore di rete: ' + err.message;
+  }
+});
+</script>
+<%- include('partials/footer') %>

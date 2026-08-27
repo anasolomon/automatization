@@ -1,0 +1,99 @@
+/* Variabili colore condivise da tutte le pagine */
+:root {
+  --bg: #0a1418;
+  --panel: #10222a;
+  --border: #24424e;
+  --accent: #ffb454;
+  --text: #e8f1f3;
+  --dim: #7a9aa3;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  min-height: 100vh;
+}
+
+a.back { text-decoration: none; color: var(--accent); font-size: 13px; }
+
+h1 { font-size: 20px; font-weight: 600; margin: 16px 0 4px; }
+
+/* --- Pagine "form" (avi_converter, jpg_converter) --- */
+.formPage {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.formPage label {
+  display: block;
+  margin-top: 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.formPage input,
+.formPage select {
+  width: 100%;
+  padding: 9px 10px;
+  margin-top: 6px;
+  box-sizing: border-box;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.formPage input[type=file] { padding: 8px; }
+.formPage input:focus,
+.formPage select:focus { outline: none; border-color: var(--accent); }
+
+.formPage button {
+  margin-top: 24px;
+  padding: 11px 22px;
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #0a1418;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.formPage button:hover { opacity: 0.92; }
+
+#status { margin-top: 16px; font-size: 13px; color: var(--dim); min-height: 18px; }
+
+/* --- Home: card dei 3 strumenti --- */
+.homeBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 100vh;
+}
+
+.buttons { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+
+a.card {
+  display: block;
+  width: 220px;
+  padding: 28px 20px;
+  background: #10222a;
+  border: 1px solid #24424e;
+  border-radius: 12px;
+  color: #e8f1f3;
+  text-decoration: none;
+  text-align: center;
+  transition: border-color 0.15s, transform 0.15s;
+}
+a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+a.card .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+a.card .desc { font-size: 13px; color: var(--dim); }

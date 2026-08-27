@@ -11,12 +11,14 @@
   .screenWrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
   .screenLabel { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); }
   #screen { position:relative; width:384px; height:683px; background:var(--panel);
-            border:3px solid #1e4a52; border-radius:14px; overflow:hidden;
+            border:3px solid #1e4a52; overflow:hidden;
             box-shadow:0 20px 50px rgba(0,0,0,0.45); }
   #dragText { position:absolute; display:flex; align-items:center; justify-content:flex-start;
               color:#fff; font-family:monospace; white-space:nowrap; overflow:hidden;
-              cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:border-box; }
-  #dragTextInner { display:inline-block; transform-origin: left center; }
+              cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:content-box;
+              padding:5px; z-index:2; }
+  #dragTextInner { display:inline-block; transform-origin: left center; letter-spacing:4.5px; }
+  #dragIcon { z-index:1; }
   #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
   .panel { width:340px; display:flex; flex-direction:column; gap:16px; }
   h1 { font-size:22px; font-weight:700; margin:0; }
@@ -59,6 +61,7 @@
     <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
     <div id="screen">
       <div id="dragText"><span id="dragTextInner">Christopher</span></div>
+      <img id="dragIcon" style="position:absolute; display:none; cursor:grab; user-select:none; -webkit-user-drag:none;">
     </div>
     <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
   </div>
@@ -112,12 +115,34 @@
       </div>
     </div>
 
+    <div style="margin-top:12px; position:relative;">
+      <button type="button" id="iconToggleBtn" style="width:100%; padding:11px 12px; background:var(--panel);
+              border:1px solid var(--border); border-radius:8px; color:#eaf3f3; font-size:14px;
+              cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
+        <span>Icone Techla</span>
+        <span id="iconToggleArrow">&#9660;</span>
+      </button>
+      <div id="iconPanel" style="display:none; position:absolute; z-index:20; top:calc(100% + 6px); left:0; right:0;
+              max-height:320px; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
+              border-radius:8px; padding:10px; box-shadow:0 12px 30px rgba(0,0,0,0.5);
+              grid-template-columns:repeat(4, 1fr); gap:10px;">
+      </div>
+    </div>
+
     <div class="readout">
       <div class="row"><span>larghezza testo (px)</span><span id="outW">-</span></div>
       <div class="row"><span>altezza testo (px)</span><span id="outH">-</span></div>
     </div>
 
     <div class="lines" id="lines">
+      <div class="lineRow" id="lineRow-icon" data-text="" style="display:none;">
+        <span class="lineText" id="lineText-icon">icon <span id="editIcon" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">1001</span></span>
+        <span class="copyHint" id="copyHint-icon">copia</span>
+      </div>
+      <div class="lineRow" id="lineRow-icongcursor" data-text="" style="display:none;">
+        <span class="lineText" id="lineText-icongcursor">gcursor <span id="editIconX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span>,<span id="editIconY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span></span>
+        <span class="copyHint" id="copyHint-icongcursor">copia</span>
+      </div>
       <div class="lineRow" id="lineRow-font" data-text="">
         <span class="lineText" id="lineText-font">font <span id="editFont" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">13</span></span>
         <span class="copyHint" id="copyHint-font">copia</span>
@@ -171,10 +196,14 @@ let state = {
   bold: false,
   pos: { x: 200, y: 650 },
   paperColor: "#0d2b6b",
+  icon: { visible: false, num: null, pos: { x: 100, y: 100 }, naturalW: 40, naturalH: 40 },
 };
 let dragging = false;
 let dragOffset = { dx:0, dy:0 };
+let iconDragging = false;
+let iconDragOffset = { dx:0, dy:0 };
 let copiedLineKey = null;
+let allJustCopied = false;
 const el = id => document.getElementById(id);
 const family = () => FAMILIES.find(f => f.base === state.familyBase);
 const fontId = () => family().base + (state.transparent ? 2 : 0) + (state.permanent ? 1 : 0) + (state.bold ? 100 : 0);
@@ -298,41 +327,40 @@ function render() {
   dragInner.style.transform = 'none'; // nessuna deformazione
   dragEl.classList.toggle('dragging', dragging);
 
-  try {
-    // Approccio semplificato: la dimensione del font si deriva SOLO
-    // dall'altezza disponibile (con margine proporzionale) — poi il
-    // risultato viene SEMPRE centrato orizzontalmente, qualunque sia
-    // la sua larghezza naturale. Questo evita margini asimmetrici,
-    // che nascevano da due correzioni in serie (larghezza poi altezza).
-    const marginX = Math.min(8, boxWidthPx * 0.12);
-    const marginY = Math.min(8, boxHeightPx * 0.12);
-    const fitWidthPx = Math.max(1, boxWidthPx - marginX * 2);
-    const fitHeightPx = Math.max(1, boxHeightPx - marginY * 2);
+  // --- icona trascinabile ---
+  const iconEl = el('dragIcon');
+  if (state.icon.visible) {
+    iconEl.style.display = 'block';
+    iconEl.style.left = (state.icon.pos.x * SCALE) + 'px';
+    iconEl.style.top = (state.icon.pos.y * SCALE) + 'px';
+    iconEl.style.width = (state.icon.naturalW * SCALE) + 'px';
+    iconEl.style.height = (state.icon.naturalH * SCALE) + 'px';
+  } else {
+    iconEl.style.display = 'none';
+  }
 
-    // Stima diretta dall'altezza: per un font monospace tipico, l'altezza
-    // "visibile" di un carattere è circa il 70% della dimensione impostata.
-    // È una stima, non un valore esatto — ma è STABILE tra i vari browser,
-    // a differenza di actualBoundingBoxAscent/Descent che si comporta in
-    // modo incoerente da un browser all'altro.
-    let fontSize = fitHeightPx / 0.7;
+  try {
+    // Dimensione derivata dalla LARGHEZZA (non più dall'altezza): stimo
+    // una dimensione di prova, misuro la larghezza reale ottenuta, e
+    // correggo proporzionalmente in un solo passaggio — i font scalano
+    // linearmente, quindi il risultato combacia quasi esattamente con
+    // boxWidthPx, senza bisogno di margini artificiali sottratti prima.
+    const charCountForSpacing = Math.max(0, (state.text || ' ').length - 1);
+    const letterSpacingTotal = charCountForSpacing * 4.5; // deve combaciare col CSS
+    const targetGlyphWidth = Math.max(1, boxWidthPx - letterSpacingTotal);
+
+    const trialSize = f.h * SCALE * 0.65;
+    measureCtx.font = `${fontWeight} ${trialSize}px monospace`;
+    const trialWidth = measureCtx.measureText(state.text || ' ').width;
+    const fontSize = trialWidth > 0 ? trialSize * (targetGlyphWidth / trialWidth) : trialSize;
 
     measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
-    let actualWidth = measureCtx.measureText(state.text || ' ').width;
-
-    // Se il testo naturale è più largo dello spazio disponibile, restringo
-    // proporzionalmente (qui serve davvero, altrimenti uscirebbe dal
-    // riquadro). Se invece è più stretto, lo lascio così: verrà centrato,
-    // non riempie tutta la larghezza ma non è un problema visivo.
-    if (actualWidth > fitWidthPx) {
-      fontSize = fontSize * (fitWidthPx / actualWidth);
-      measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
-      actualWidth = measureCtx.measureText(state.text || ' ').width;
-    }
+    const actualGlyphWidth = measureCtx.measureText(state.text || ' ').width;
+    const actualWidth = actualGlyphWidth + letterSpacingTotal; // larghezza vera, spaziatura inclusa
 
     dragInner.style.fontSize = fontSize + 'px';
-    // Centro SEMPRE in base alla larghezza reale ottenuta — garantisce
-    // margini simmetrici in ogni caso, indipendentemente da quale vincolo
-    // (larghezza o altezza) abbia determinato la dimensione finale.
+    // Centro in base alla larghezza reale (glifi + letter-spacing) — il
+    // margine risultante è vicino a zero per costruzione.
     dragInner.style.marginLeft = Math.max(0, (boxWidthPx - actualWidth) / 2) + 'px';
     dragInner.style.marginTop = '0';
     dragInner.style.marginBottom = '0';
@@ -356,6 +384,8 @@ function render() {
 
   // --- le 3 righe di codice copiabili ---
   const lines = [
+    { key:'icon',    text:`icon ${1000 + (state.icon.num || 1)}` },
+    { key:'icongcursor', text:`gcursor ${state.icon.pos.x},${state.icon.pos.y}` },
     { key:'font',    text:`font ${fontId()}` },
     { key:'gcursor', text:`gcursor ${state.pos.x},${state.pos.y}` },
     { key:'print',   text:`print "${state.text}"` },
@@ -367,7 +397,14 @@ function render() {
   lines.forEach(l => {
     el(`lineRow-${l.key}`).dataset.text = l.text;
     const textEl = el(`lineText-${l.key}`);
-    if (l.key === 'font') {
+    if (l.key === 'icon') {
+      el('lineRow-icon').style.display = state.icon.visible ? 'flex' : 'none';
+      if (document.activeElement !== el('editIcon')) el('editIcon').textContent = 1000 + (state.icon.num || 1);
+    } else if (l.key === 'icongcursor') {
+      el('lineRow-icongcursor').style.display = state.icon.visible ? 'flex' : 'none';
+      if (document.activeElement !== el('editIconX')) el('editIconX').textContent = state.icon.pos.x;
+      if (document.activeElement !== el('editIconY')) el('editIconY').textContent = state.icon.pos.y;
+    } else if (l.key === 'font') {
       if (document.activeElement !== el('editFont')) el('editFont').textContent = fontId();
     } else if (l.key === 'gcursor') {
       // Non sovrascrivo tutto il testo (distruggerebbe editX/editY):
@@ -380,8 +417,9 @@ function render() {
     } else {
       textEl.textContent = l.text;
     }
-    textEl.style.color = copiedLineKey === l.key ? '#8de3a0' : '#eaf3f3';
-    el(`copyHint-${l.key}`).textContent = copiedLineKey === l.key ? 'copiato' : 'copia';
+    const isCopied = copiedLineKey === l.key || allJustCopied;
+    textEl.style.color = isCopied ? '#8de3a0' : '#eaf3f3';
+    el(`copyHint-${l.key}`).textContent = isCopied ? 'copiato' : 'copia';
   });
 }
 
@@ -412,10 +450,118 @@ el('bgResetBtn').addEventListener('click', () => {
   el('bgFileInput').value = '';
 });
 
+// --- Selettore icone Techla (Immagine1.bmp...Immagine214.bmp in public/imgs) ---
+const ICON_COUNT = 214;
+const iconPanel = el('iconPanel');
+
+// Popolo la tendina una volta sola: ogni cella mostra l'icona e, sotto,
+// il SUO codice Techla reale (icon 100N), non il numero del file.
+for (let n = 1; n <= ICON_COUNT; n++) {
+  const techlaCode = 1000 + n;
+  const cell = document.createElement('div');
+  cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:6px;border-radius:6px;';
+  cell.addEventListener('mouseenter', () => cell.style.background = '#123840');
+  cell.addEventListener('mouseleave', () => cell.style.background = 'transparent');
+
+  const img = document.createElement('img');
+  img.src = `imgs/Immagine${n}.bmp`;
+  img.alt = String(techlaCode);
+  img.style.cssText = 'width:40px;height:40px;object-fit:contain;image-rendering:pixelated;background:#0a1f26;border:1px solid var(--border);border-radius:4px;';
+
+  const label = document.createElement('div');
+  label.textContent = techlaCode;
+  label.style.cssText = 'font-size:11px;color:var(--dim);font-family:monospace;';
+
+  cell.appendChild(img);
+  cell.appendChild(label);
+  cell.addEventListener('click', () => {
+    // Uso le dimensioni NATURALI vere dell'immagine appena caricata,
+    // così l'icona a schermo ha le proporzioni corrette.
+    const naturalW = img.naturalWidth || 40;
+    const naturalH = img.naturalHeight || 40;
+
+    // Calcolo il PUNTO MEDIO dell'icona attuale (se ce n'era una), e
+    // riposiziono la nuova icona in modo che il SUO punto medio coincida
+    // con lo stesso punto — così resta "nello stesso posto" visivamente,
+    // ma gcursor (l'angolo) cambia correttamente in base alla nuova
+    // dimensione, invece di restare sempre lo stesso numero.
+    const oldCenterX = state.icon.pos.x + state.icon.naturalW / 2;
+    const oldCenterY = state.icon.pos.y + state.icon.naturalH / 2;
+    const newX = clamp(oldCenterX - naturalW / 2, SCREEN_W);
+    const newY = clamp(oldCenterY - naturalH / 2, SCREEN_H);
+
+    state.icon = {
+      visible: true,
+      num: n,
+      pos: { x: newX, y: newY },
+      naturalW, naturalH,
+    };
+    el('dragIcon').src = img.src;
+    iconPanel.style.display = 'none';
+    el('iconToggleArrow').innerHTML = '&#9660;';
+    render();
+  });
+  iconPanel.appendChild(cell);
+}
+iconPanel.style.display = 'none';
+// il display grid va riapplicato ogni volta che lo si mostra, dato che lo
+// nascondo con display:none (che sovrascriverebbe "grid" se lo lasciassi lì)
+function showIconPanel(show) {
+  iconPanel.style.display = show ? 'grid' : 'none';
+  el('iconToggleArrow').innerHTML = show ? '&#9650;' : '&#9660;';
+}
+el('iconToggleBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  showIconPanel(iconPanel.style.display !== 'grid');
+});
+document.addEventListener('click', (e) => {
+  if (iconPanel.style.display === 'grid' && !iconPanel.contains(e.target) && e.target.id !== 'iconToggleBtn') {
+    showIconPanel(false);
+  }
+});
+
+// Trascinamento dell'icona: stessa identica logica del testo, ma su un
+// elemento e uno stato separati (state.icon.pos invece di state.pos).
+const dragIconEl = el('dragIcon');
+dragIconEl.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const rect = screenEl.getBoundingClientRect();
+  iconDragOffset.dx = e.clientX - (rect.left + state.icon.pos.x * SCALE);
+  iconDragOffset.dy = e.clientY - (rect.top + state.icon.pos.y * SCALE);
+  iconDragging = true;
+});
+dragIconEl.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const rect = screenEl.getBoundingClientRect();
+  iconDragOffset.dx = t.clientX - (rect.left + state.icon.pos.x * SCALE);
+  iconDragOffset.dy = t.clientY - (rect.top + state.icon.pos.y * SCALE);
+  iconDragging = true;
+});
+window.addEventListener('mousemove', e => {
+  if (!iconDragging) return;
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (e.clientX - iconDragOffset.dx - rect.left) / SCALE;
+  const rawY = (e.clientY - iconDragOffset.dy - rect.top) / SCALE;
+  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('touchmove', e => {
+  if (!iconDragging) return;
+  const t = e.touches[0];
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (t.clientX - iconDragOffset.dx - rect.left) / SCALE;
+  const rawY = (t.clientY - iconDragOffset.dy - rect.top) / SCALE;
+  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+});
+window.addEventListener('mouseup', () => { iconDragging = false; });
+window.addEventListener('touchend', () => { iconDragging = false; });
+
+
 // Click sulle righe di codice: qui NON serve più la delega, perché le
 // righe non vengono più ricreate — esistono fin dall'inizio, esattamente
 // come i bottoni. Assegno un listener diretto a ciascuna, una volta sola.
-['font', 'gcursor', 'print'].forEach(key => {
+['icon', 'icongcursor', 'font', 'gcursor', 'print'].forEach(key => {
   el(`lineRow-${key}`).addEventListener('click', () => {
     const text = el(`lineRow-${key}`).dataset.text;
     copyToClipboard(text);
@@ -429,19 +575,18 @@ el('bgResetBtn').addEventListener('click', () => {
 // (stopPropagation), permettendo di scrivere direttamente nello span
 // (contenteditable="true" nell'HTML). La modifica si conferma con Invio
 // o uscendo dal campo (blur); Esc annulla e ripristina il valore attuale.
-function commitEdit(spanId, axis, maxVal) {
+function commitEdit(spanId, posObj, axis, maxVal) {
   const span = el(spanId);
   const num = parseInt(span.textContent, 10);
   if (!isNaN(num)) {
-    state.pos[axis] = clamp(num, maxVal);
+    posObj[axis] = clamp(num, maxVal);
   }
   render(); // ripristina comunque il testo (corregge input non validi)
 }
 
-['editX', 'editY'].forEach(id => {
+[['editX','x','pos'], ['editY','y','pos'], ['editIconX','x','icon'], ['editIconY','y','icon']].forEach(([id, axis, target]) => {
   const span = el(id);
-  const axis = id === 'editX' ? 'x' : 'y';
-  const maxVal = id === 'editX' ? SCREEN_W : SCREEN_H;
+  const maxVal = axis === 'x' ? SCREEN_W : SCREEN_H;
 
   span.addEventListener('mousedown', e => e.stopPropagation());
   span.addEventListener('click', e => e.stopPropagation());
@@ -457,7 +602,14 @@ function commitEdit(spanId, axis, maxVal) {
     }
   });
 
-  span.addEventListener('blur', () => commitEdit(id, axis, maxVal));
+  // Risolvo l'oggetto posizione ADESSO, al momento del blur — non
+  // in anticipo — perché state.icon viene riassegnato per intero
+  // quando scegli un'icona dalla tendina (un riferimento catturato
+  // prima punterebbe a un oggetto ormai abbandonato).
+  span.addEventListener('blur', () => {
+    const posObj = target === 'pos' ? state.pos : state.icon.pos;
+    commitEdit(id, posObj, axis, maxVal);
+  });
 });
 
 // Stessa logica per il numero di font, con doppia validazione: deve
@@ -465,6 +617,35 @@ function commitEdit(spanId, axis, maxVal) {
 // trasparente+bold (decomposeFontId). Se non valido, richiamando
 // render() senza aver toccato lo stato, il campo torna a mostrare il
 // numero di prima — che sia calcolato o l'ultimo scritto valido.
+// Stessa logica per il numero dell'icona: 1001-(1000+ICON_COUNT) valido,
+// altrimenti torna al numero precedente. Se valido, ricarico anche
+// l'immagine giusta e ne rimisuro le dimensioni naturali.
+const editIconSpan = el('editIcon');
+editIconSpan.addEventListener('mousedown', e => e.stopPropagation());
+editIconSpan.addEventListener('click', e => e.stopPropagation());
+editIconSpan.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); editIconSpan.blur(); }
+  else if (e.key === 'Escape') { e.preventDefault(); render(); editIconSpan.blur(); }
+});
+editIconSpan.addEventListener('blur', () => {
+  const num = parseInt(editIconSpan.textContent, 10);
+  const minCode = 1001, maxCode = 1000 + ICON_COUNT;
+  if (!isNaN(num) && num >= minCode && num <= maxCode) {
+    const n = num - 1000;
+    state.icon.num = n;
+    const img = new Image();
+    img.onload = () => {
+      state.icon.naturalW = img.naturalWidth || state.icon.naturalW;
+      state.icon.naturalH = img.naturalHeight || state.icon.naturalH;
+      render();
+    };
+    img.src = `imgs/Immagine${n}.bmp`;
+    el('dragIcon').src = img.src;
+  }
+  // fuori range o non numerico: non tocco lo stato, render() ripristina
+  render();
+});
+
 const editFontSpan = el('editFont');
 editFontSpan.addEventListener('mousedown', e => e.stopPropagation());
 editFontSpan.addEventListener('click', e => e.stopPropagation());
@@ -540,7 +721,9 @@ el('copyAllBtn').addEventListener('click', () => {
   const btn = el('copyAllBtn');
   const original = btn.textContent;
   btn.textContent = 'Copiato!';
-  setTimeout(() => { btn.textContent = original; }, 1200);
+  allJustCopied = true;
+  render();
+  setTimeout(() => { btn.textContent = original; allJustCopied = false; render(); }, 1200);
 });
 
 // drag: identico nello spirito al tuo /testo esistente
