@@ -13,13 +13,14 @@
   #screen { position:relative; width:384px; height:683px; background:var(--panel);
             border:3px solid #1e4a52; overflow:hidden;
             box-shadow:0 20px 50px rgba(0,0,0,0.45); }
-  #dragText { position:absolute; display:flex; align-items:center; justify-content:flex-start;
-              color:#fff; font-family:monospace; white-space:nowrap; overflow:hidden;
-              cursor:grab; user-select:none; outline:1px dashed rgba(255,255,255,0.4); box-sizing:content-box;
+  .elText { position:absolute; display:flex; align-items:center; justify-content:flex-start;
+              font-family:monospace; white-space:nowrap; overflow:hidden;
+              cursor:grab; user-select:none; box-sizing:content-box;
               padding:5px; z-index:2; }
-  #dragTextInner { display:inline-block; transform-origin: left center; letter-spacing:4.5px; }
-  #dragIcon { z-index:1; }
-  #dragText.dragging { cursor:grabbing; outline-color:var(--accent); }
+  .elTextInner { display:inline-block; transform-origin: left center; letter-spacing:4.5px; }
+  .elIcon { position:absolute; cursor:grab; user-select:none; -webkit-user-drag:none; z-index:1; }
+  .elSelected { outline:2px solid var(--accent); outline-offset:0; }
+  .infoPanel { width:340px; }
   .panel { width:340px; display:flex; flex-direction:column; gap:16px; }
   h1 { font-size:22px; font-weight:700; margin:0; }
   .sub { font-size:13px; color:#9cc9cd; margin-top:4px; }
@@ -27,7 +28,6 @@
   input[type=text], select { background:var(--panel); border:1px solid var(--border); border-radius:8px;
          padding:8px 10px; color:#fff; font-size:14px; }
   .checkboxRow { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
-  #boldCk:disabled { cursor:not-allowed; }
   .colorRow { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--dim); }
   .tooltip { position:absolute; top:calc(100% + 8px); left:0; width:300px; z-index:10;
          background:#123840; border:1px solid #2d6069; border-radius:8px; padding:10px 12px;
@@ -35,6 +35,12 @@
          display:none; }
   button.reset { background:#1e4a52; border:1px solid #2d6069; border-radius:8px; padding:9px 12px;
          color:#eaf3f3; font-size:13px; cursor:pointer; text-align:left; }
+  .dpad-btn { margin-top:0 !important; text-align:center !important; padding:8px 4px !important; }
+  button.deleteBtn { background:#4a1f23; border:1px solid #7a2d33; border-radius:8px; padding:9px 12px;
+         color:#ff8a8a; font-size:13px; font-weight:700; cursor:pointer; width:100%; }
+  button.deleteBtn:hover { background:#5c262c; }
+  button.addBtn { background:var(--accent); border:none; border-radius:8px; width:38px;
+         color:#0a1f26; font-size:18px; font-weight:700; cursor:pointer; flex-shrink:0; }
   .readout { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px;
          display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:13px; }
   .readout .row { display:flex; justify-content:space-between; }
@@ -43,85 +49,35 @@
   .divider { height:1px; background:var(--border); margin:4px 0; }
   .lines { background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
   .lineRow { display:flex; align-items:center; justify-content:space-between; padding:8px 14px;
-         font-family:monospace; font-size:12.5px; cursor:pointer; border-top:1px solid #16333a; }
-  .lineRow:first-child { border-top:none; }
-  .lineRow:hover { background:#123840; }
+         font-family:monospace; font-size:12.5px; cursor:pointer; flex:1; }
+  .lines > *:not(:first-child) { border-top:1px solid #16333a; }
+  .lineRowWrapper { display:flex; align-items:stretch; }
+  .hideLineBtn { flex-shrink:0; width:32px; display:flex; align-items:center; justify-content:center;
+         cursor:pointer; color:var(--dim); font-size:14px; border-left:1px solid #16333a; }
+  .hideLineBtn:hover { color:#ff6b6b; background:#1a2a2e; }
   .copyHint { font-size:11px; color:var(--dim); opacity:0; transition:opacity .1s; }
   .lineRow:hover .copyHint { opacity:1; }
+  .lineOwnerSelected { background:rgba(255,179,122,0.10); border-left:3px solid var(--accent); }
+  .lineOwnerSelected .lineRow, .lineRow.lineOwnerSelected { padding-left:11px; }
   button.copyAll { background:var(--accent); border:none; border-radius:8px; padding:10px 12px;
          color:#0a1f26; font-weight:700; font-size:13px; cursor:pointer; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <p style="width:100%;text-align:center;margin:0;">
     <a href="/" style="text-decoration:none;color:#ffb454;">&larr; Torna alla home</a>
   </p>
 
-  <div class="screenWrap">
-    <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
-    <div id="screen">
-      <div id="dragText"><span id="dragTextInner">Christopher</span></div>
-      <img id="dragIcon" style="position:absolute; display:none; cursor:grab; user-select:none; -webkit-user-drag:none;">
-    </div>
-    <div style="font-size:12px;color:var(--dim);">trascina il testo per posizionarlo</div>
-  </div>
-
-  <div class="panel">
-    <label class="field">
-      <span>Testo</span>
-      <input type="text" id="textInput" value="Christopher">
-    </label>
-
-    <label class="field">
-      <span>Dimensione (famiglia font)</span>
-      <select id="fontSelect"></select>
-    </label>
-
-    <div style="display:flex; gap:16px;">
-      <label class="checkboxRow" style="width:130px;"><input type="checkbox" id="coprenteCk" checked> Coprente</label>
-      <label class="checkboxRow"><input type="checkbox" id="transparentCk"> Trasparente</label>
-    </div>
-
-    <div style="position:relative;display:flex;gap:16px;">
-      <label class="checkboxRow" id="nonPermLabel" style="width:130px;">
-        <input type="checkbox" id="nonPermCk" checked> Non permanente
-      </label>
-      <label class="checkboxRow" id="permLabel">
-        <input type="checkbox" id="permCk"> Permanente
-      </label>
-      <div id="tooltip" class="tooltip"></div>
-    </div>
-
-    <label class="checkboxRow" id="boldRow">
-      <input type="checkbox" id="boldCk">
-      <span id="boldLabel">Bold</span>
-      <span id="boldDisabledNote" style="display:none; color:#ff6b6b; font-size:12px;">Troppo piccolo per bold</span>
-      <span id="numbersOnlyNote" style="display:none; font-size:12px; color:var(--dim);">solo per numeri</span>
-    </label>
-
-    <label class="colorRow" id="colorRow">
-      <span>Colore paper (sfondo dietro al testo)</span>
-      <input type="color" id="paperColor" value="#0d2b6b">
-    </label>
-
-    <button class="reset" id="resetHBtn">Reset — solo orizzontale</button>
-    <button class="reset" id="resetVBtn">Reset — solo verticale</button>
-
-    <div id="bgPicker" style="margin-top:12px;">
-      <div style="font-size:13px; color:var(--dim); margin-bottom:8px;">Scegli sfondo Techla</div>
-      <div style="display:flex; gap:8px;">
-        <input type="file" id="bgFileInput" accept="image/*" style="flex:1; padding:8px; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:13px;">
-        <button type="button" class="reset" id="bgResetBtn" style="margin-top:0; width:auto;">Reset</button>
-      </div>
-    </div>
-
-    <div style="margin-top:12px; position:relative;">
-      <button type="button" id="iconToggleBtn" style="width:100%; padding:11px 12px; background:var(--panel);
+  <div class="infoPanel">
+    <div style="margin-bottom:14px; position:relative; display:flex; gap:8px; align-items:stretch;">
+      <button type="button" id="iconToggleBtn" style="flex:1; padding:11px 12px; background:var(--panel);
               border:1px solid var(--border); border-radius:8px; color:#eaf3f3; font-size:14px;
               cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-        <span>Icone Techla</span>
+        <span>Aggiungi icona Techla</span>
         <span id="iconToggleArrow">&#9660;</span>
       </button>
+      <button type="button" class="addBtn" id="resetIconsBtn" title="Rimuovi tutte le icone" style="background:#4a1f23; color:#ff8a8a; font-size:14px;">&#8635;</button>
       <div id="iconPanel" style="display:none; position:absolute; z-index:20; top:calc(100% + 6px); left:0; right:0;
               max-height:320px; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
               border-radius:8px; padding:10px; box-shadow:0 12px 30px rgba(0,0,0,0.5);
@@ -129,45 +85,138 @@
       </div>
     </div>
 
+    <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--dim); margin-bottom:10px;">
+      Elemento attivo: <span id="activeElementLabel" style="color:var(--accent); text-transform:none; letter-spacing:normal;">-</span>
+    </div>
     <div class="readout">
-      <div class="row"><span>larghezza testo (px)</span><span id="outW">-</span></div>
-      <div class="row"><span>altezza testo (px)</span><span id="outH">-</span></div>
+      <div class="row"><span>larghezza (px)</span><span id="outW">-</span></div>
+      <div class="row"><span>metà larghezza (px)</span><span id="outHalfW">-</span></div>
+      <div class="divider"></div>
+      <div class="row"><span>altezza (px)</span><span id="outH">-</span></div>
+      <div class="row"><span>metà altezza (px)</span><span id="outHalfH">-</span></div>
     </div>
 
-    <div class="lines" id="lines">
-      <div class="lineRow" id="lineRow-icon" data-text="" style="display:none;">
-        <span class="lineText" id="lineText-icon">icon <span id="editIcon" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">1001</span></span>
-        <span class="copyHint" id="copyHint-icon">copia</span>
-      </div>
-      <div class="lineRow" id="lineRow-icongcursor" data-text="" style="display:none;">
-        <span class="lineText" id="lineText-icongcursor">gcursor <span id="editIconX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span>,<span id="editIconY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">100</span></span>
-        <span class="copyHint" id="copyHint-icongcursor">copia</span>
-      </div>
-      <div class="lineRow" id="lineRow-font" data-text="">
-        <span class="lineText" id="lineText-font">font <span id="editFont" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">13</span></span>
-        <span class="copyHint" id="copyHint-font">copia</span>
-      </div>
-      <div class="lineRow" id="lineRow-gcursor" data-text="">
-        <span class="lineText" id="lineText-gcursor">gcursor <span id="editX" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span>,<span id="editY" contenteditable="true" spellcheck="false" style="display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;">0</span></span>
-        <span class="copyHint" id="copyHint-gcursor">copia</span>
-      </div>
-      <div class="lineRow" id="lineRow-print" data-text="">
-        <span class="lineText" id="lineText-print"></span>
-        <span class="copyHint" id="copyHint-print">copia</span>
+    <div id="bgPicker" style="margin-top:14px;">
+      <div style="font-size:12px; color:var(--dim); margin-bottom:6px;">Scegli sfondo Techla</div>
+      <div style="display:flex; gap:8px;">
+        <input type="file" id="bgFileInput" accept="image/*" style="flex:1; padding:6px; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:12px;">
+        <button type="button" class="reset" id="bgResetBtn" style="margin-top:0; width:auto;">Reset</button>
       </div>
     </div>
 
-    <button class="copyAll" id="copyAllBtn">Copia il codice PLC</button>
+    <button type="button" class="reset" id="saveImageBtn" style="width:100%; margin-top:10px; text-align:center;">Salva schermata come immagine</button>
+
+    <div class="lines" id="lines" style="margin-top:14px;"></div>
+    <button class="copyAll" id="copyAllBtn" style="width:100%; margin-top:10px;">Copia il codice PLC (tutti gli elementi)</button>
+  </div>
+
+  <div class="screenWrap">
+    <div class="screenLabel">Anteprima schermo — 768×1366px reali</div>
+    <div id="screen"></div>
+    <div style="font-size:12px;color:var(--dim);">clicca un elemento per selezionarlo, trascinalo per muoverlo</div>
+  </div>
+
+  <div class="panel">
+    <label class="field">
+      <span>Testo (dell'elemento selezionato, se è un testo)</span>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="textInput" value="Christopher" style="flex:1;">
+        <button type="button" class="addBtn" id="addTextBtn" title="Aggiungi un nuovo testo">+</button>
+        <button type="button" class="addBtn" id="resetTextsBtn" title="Rimuovi tutti i testi (torna a uno di default)" style="background:#4a1f23; color:#ff8a8a; font-size:14px;">&#8635;</button>
+      </div>
+    </label>
+
+    <label class="field">
+      <span>Dimensione (famiglia font)</span>
+      <select id="fontSelect"></select>
+    </label>
+
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; gap:16px;">
+        <label class="checkboxRow" style="width:130px;"><input type="checkbox" id="coprenteCk" checked>Coprente</label>
+        <label class="checkboxRow"><input type="checkbox" id="transparentCk">Trasparente</label>
+      </div>
+
+      <div style="position:relative;display:flex;gap:16px;">
+        <label class="checkboxRow" id="nonPermLabel" style="width:130px;">
+          <input type="checkbox" id="nonPermCk" checked> Non permanente
+        </label>
+        <label class="checkboxRow" id="permLabel">
+          <input type="checkbox" id="permCk"> Permanente
+        </label>
+        <div id="tooltip" class="tooltip"></div>
+      </div>
+
+      <label class="checkboxRow" id="boldRow">
+        <input type="checkbox" id="boldCk">
+        <span id="boldLabel">Bold</span>
+        <span id="boldDisabledNote" style="display:none; color:#ff6b6b; font-size:12px;">Troppo piccolo per bold</span>
+        <span id="numbersOnlyNote" style="display:none; font-size:12px; color:var(--dim);">solo per numeri</span>
+      </label>
+    </div>
+
+    <label class="colorRow" id="colorRow">
+      <span style="width:180px;">Colore paper (sfondo dietro al testo)</span>
+      <div style="position:relative;">
+        <button type="button" id="colorToggleBtn" style="padding:6px 10px; background:var(--panel);
+                border:1px solid var(--border); border-radius:6px; color:#eaf3f3; font-size:12px;
+                cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <span id="colorSwatch" style="width:12px;height:12px;border-radius:3px;background:#003d4b;border:1px solid rgba(255,255,255,0.3);flex-shrink:0;"></span>
+          Predefiniti <span id="colorToggleArrow">&#9660;</span>
+        </button>
+        <div id="colorPanel" style="display:none; position:absolute; z-index:20; top:calc(100% + 4px); left:0;
+                background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:6px;
+                box-shadow:0 12px 30px rgba(0,0,0,0.5); max-height:260px; overflow-y:auto; min-width:180px;">
+        </div>
+      </div>
+      <input type="color" id="paperColor" value="#003d4b">
+    </label>
+
+    <label class="colorRow" id="textColorRow">
+      <span style="width:180px;">Colore testo</span>
+      <div style="position:relative;">
+        <button type="button" id="textColorToggleBtn" style="padding:6px 10px; background:var(--panel);
+                border:1px solid var(--border); border-radius:6px; color:#eaf3f3; font-size:12px;
+                cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <span id="textColorSwatch" style="width:12px;height:12px;border-radius:3px;background:#ffffff;border:1px solid rgba(255,255,255,0.3);flex-shrink:0;"></span>
+          Predefiniti <span id="textColorToggleArrow">&#9660;</span>
+        </button>
+        <div id="textColorPanel" style="display:none; position:absolute; z-index:20; top:calc(100% + 4px); left:0;
+                background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:6px;
+                box-shadow:0 12px 30px rgba(0,0,0,0.5); max-height:260px; overflow-y:auto; min-width:180px;">
+        </div>
+      </div>
+      <input type="color" id="textColorInput" value="#ffffff">
+    </label>
+
+    <div class="divider"></div>
+
+    <div style="display:flex; gap:6px; justify-content:center; margin-top:8px;">
+      <button type="button" class="reset dpad-btn" id="resetXBtn" style="background:var(--accent); color:#0a1418; font-weight:700;">Reset X</button>
+      <button type="button" class="reset dpad-btn" id="resetYBtn" style="background:var(--accent); color:#0a1418; font-weight:700;">Reset Y</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; width:220px; margin:0 auto;">
+      <div></div>
+      <button type="button" class="reset dpad-btn" id="moveTopBtn">+<span id="stepTop" contenteditable="true" spellcheck="false" style="display:inline-block;padding:2px;margin:-2px;outline:none;">10</span>px</button>
+      <div></div>
+
+      <button type="button" class="reset dpad-btn" id="moveLeftBtn">+<span id="stepLeft" contenteditable="true" spellcheck="false" style="display:inline-block;padding:2px;margin:-2px;outline:none;">10</span>px</button>
+      <div style="display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--dim); text-align:center; padding:4px;" id="dpadCenterLabel">-</div>
+      <button type="button" class="reset dpad-btn" id="moveRightBtn">+<span id="stepRight" contenteditable="true" spellcheck="false" style="display:inline-block;padding:2px;margin:-2px;outline:none;">10</span>px</button>
+
+      <div></div>
+      <button type="button" class="reset dpad-btn" id="moveBottomBtn">+<span id="stepBottom" contenteditable="true" spellcheck="false" style="display:inline-block;padding:2px;margin:-2px;outline:none;">10</span>px</button>
+      <div></div>
+    </div>
+
+    <div class="divider"></div>
+    <button type="button" class="deleteBtn" id="deleteBtn">Elimina elemento selezionato</button>
   </div>
 
 <script>
-// ============================================================
-// Stato: in React era useState(...). Qui sono solo variabili JS
-// normali — nessuna differenza di fondo, cambia solo CHI si
-// occupa di "ridisegnare" quando cambiano.
-// ============================================================
 const SCREEN_W = 768, SCREEN_H = 1366;
-const SCALE = 384 / SCREEN_W; // stessa idea dello "scale" in App.jsx, qui fisso per semplicità
+const SCALE = 384 / SCREEN_W;
 
 const FAMILIES = [
   { base:0,  w:12,  h:16,  hebrewExcluded:false },
@@ -188,84 +237,102 @@ const FAMILIES = [
   { base:69, w:32,  h:48,  hebrewExcluded:false },
 ].sort((a,b) => a.w*a.h - b.w*b.h);
 
-let state = {
-  text: "Christopher",
-  familyBase: 13,
-  transparent: false,
-  permanent: false,
-  bold: false,
-  pos: { x: 200, y: 650 },
-  paperColor: "#0d2b6b",
-  icon: { visible: false, num: null, pos: { x: 100, y: 100 }, naturalW: 40, naturalH: 40 },
+const ICON_COUNT = 214;
+const ICON_NICKNAMES = {
+  1019:'kI_SX', 1020:'kI_DX', 1021:'kI_123', 1022:'kI_ABC', 1023:'kI_BACK',
+  1024:'kI_UP', 1025:'kI_UP2', 1026:'kI_KBD', 1027:'kI_UK', 1028:'kI_GR',
+  1029:'kI_IL', 1030:'kI_JP', 1031:'kI_RU', 1058:'kI_US', 1044:'kI_FR',
+  1042:'kI_ES', 1034:'kI_AE', 1048:'KI_KR', 1068:'kI_123b', 1084:'kI_UA',
+  1085:'kI_ITY_logo', 1137:'kI_BG', 1086:'kI_IT_flag', 1087:'kI_UK_flag',
+  1088:'kI_FR_flag', 1089:'kI_DE_flag', 1090:'kI_ES_flag', 1091:'kI_PT_flag',
+  1092:'kI_RU_flag', 1093:'kI_GR_flag', 1094:'kI_JP_flag', 1095:'kI_IL_flag',
+  1096:'kI_NO_flag', 1097:'kI_KR_flag', 1098:'kI_DK_flag', 1099:'kI_US_flag',
+  1100:'kI_TH_flag', 1101:'kI_RO_flag', 1102:'kI_HR_flag', 1103:'kI_SR_flag',
+  1104:'kI_SI_flag', 1105:'kI_HU_flag', 1106:'kI_AE_flag', 1107:'kI_FI_flag',
+  1108:'kI_SE_flag', 1109:'kI_NL_flag', 1110:'kI_PL_flag', 1111:'kI_UA_flag',
+  1138:'kI_BG_flag', 1125:'kI_World_BL01', 1207:'kI_World_BL02',
+  1112:'kI_ITY_Bone', 1113:'kI_ITY_Heart', 1114:'kI_ITY_Circle',
+  1122:'kI_ITY_ZamaBone', 1123:'kI_ITY_ZamaHeart', 1124:'kI_ITY_ZamaPaw',
+  1115:'kI_ITY_BoneS', 1116:'kI_ITY_BoneL', 1117:'kI_ITY_BoneXL',
+  1118:'kI_ITY_HeartS', 1119:'kI_ITY_HeartL', 1120:'kI_ITY_CircleS',
+  1121:'kI_ITY_CircleL', 1126:'kI_ITY_ZamaBonePack', 1127:'kI_ITY_ZamaHeartPack',
+  1128:'kI_ITY_ZamaPawPack', 1129:'kI_ATTENTION', 1136:'kI_Barcode',
+  1139:'kI_CH', 1057:'kI_TH', 1152:'kI_WiFiSearch', 1175:'kI_EmptyIcon',
+  1182:'kI_LOGO', 1205:'kI_ROW',
 };
+function iconDisplayValue(code) { return ICON_NICKNAMES[code] || String(code); }
+
+const PRESET_COLORS = [
+  { name: 'kC_GR01', hex: '#d7c7b4' }, { name: 'kC_GR02', hex: '#dcd1c3' },
+  { name: 'kC_GR03', hex: '#baa794' }, { name: 'kC_GR04', hex: '#dcd1c3' },
+  { name: 'kC_GR05', hex: '#e9e1d8' }, { name: 'kC_GR06', hex: '#4d7881' },
+  { name: 'kC_RD01', hex: '#e30613' }, { name: 'kC_BL01', hex: '#003d4b' },
+  { name: 'kC_BL02', hex: '#4d7881' },
+  { name: 'kC_BK',   hex: '#000000' }, { name: 'kC_WH',   hex: '#ffffff' },
+  { name: 'kC_GR',   hex: '#969696' }, { name: 'kC_GR2',  hex: '#afafaf' },
+  { name: 'kC_GR3',  hex: '#ebebeb' }, { name: 'kC_GR4',  hex: '#9d9d9c' },
+  { name: 'kC_GR5',  hex: '#dadada' }, { name: 'kC_GR6',  hex: '#dadada' },
+  { name: 'kC_GR7',  hex: '#354050' }, { name: 'kC_GR8',  hex: '#bfc4c6' },
+  { name: 'kC_RD',   hex: '#e30613' }, { name: 'kC_GN',   hex: '#96c11f' },
+  { name: 'kC_BL',   hex: '#0000ff' }, { name: 'kC_GD',   hex: '#d5aa41' },
+  { name: 'kC_YW',   hex: '#ffff00' },
+];
+function colorDisplayValue(hex) {
+  const found = PRESET_COLORS.find(c => c.hex.toLowerCase() === (hex || '').toLowerCase());
+  return found ? found.name : hex;
+}
+
+let elements = [
+  { id: 1, type: 'text', text: "Christopher", familyBase: 13, transparent: false, permanent: false, bold: false,
+    pos: { x: 200, y: 650 }, paperColor: "#003d4b", textColor: "#ffffff",
+    hiddenLines: new Set(['paper','color']) },
+];
+let nextId = 2;
+let selectedId = 1;
+
 let dragging = false;
+let showOutline = false; // il contorno e' separato dalla selezione: sparisce da solo, la selezione resta
 let dragOffset = { dx:0, dy:0 };
-let iconDragging = false;
-let iconDragOffset = { dx:0, dy:0 };
 let copiedLineKey = null;
 let allJustCopied = false;
-const el = id => document.getElementById(id);
-const family = () => FAMILIES.find(f => f.base === state.familyBase);
-const fontId = () => family().base + (state.transparent ? 2 : 0) + (state.permanent ? 1 : 0) + (state.bold ? 100 : 0);
 
-// Scompone un numero di font digitato a mano nei suoi componenti reali
-// (famiglia, trasparente, bold), così può aggiornare lo STATO VERO invece
-// di essere solo un numero "finto" scollegato da dropdown/simulazione.
-// Ritorna null se il numero non corrisponde a nessuna combinazione valida.
+const el = id => document.getElementById(id);
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d');
+const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
+
+function getSelected() { return elements.find(e => e.id === selectedId) || null; }
+// Icone sempre prima dei testi nel codice (visualizzato e copiato) —
+// l'ordine di creazione non conta per questo, solo il tipo.
+function family(elObj) { return FAMILIES.find(f => f.base === elObj.familyBase) ?? FAMILIES[0]; }
+function fontId(elObj) {
+  return family(elObj).base + (elObj.transparent ? 2 : 0) + (elObj.permanent ? 1 : 0) + (elObj.bold ? 100 : 0);
+}
 function decomposeFontId(num) {
-  // Soglia Bold: 101-172 = Bold acceso, sotto = Bold spento (come richiesto).
   const bold = num >= 101;
   const withoutBold = bold ? num - 100 : num;
   for (const f of FAMILIES) {
     const diff = withoutBold - f.base;
-    // Ogni famiglia occupa un blocco di 4 numeri: base(coprente),
-    // base+1(coprente permanente), base+2(trasparente), base+3(trasparente
-    // permanente). Il "permanente" non è esposto in UI, quindi 0/1 diventano
-    // coprente, 2/3 diventano trasparente — accetto l'intero blocco, non
-    // solo i due valori esatti 0 e 2 come prima (troppo restrittivo).
     if (diff >= 0 && diff <= 3) {
       const boldNotAvailable = (f.base === 0 || f.base === 1);
-      if (bold && boldNotAvailable) return null; // stessa regola della checkbox Bold disabilitata
-      return {
-        familyBase: f.base,
-        transparent: diff === 2 || diff === 3,
-        permanent: diff === 1 || diff === 3,
-        bold,
-      };
+      if (bold && boldNotAvailable) return null;
+      return { familyBase: f.base, transparent: diff === 2 || diff === 3, permanent: diff === 1 || diff === 3, bold };
     }
   }
   return null;
 }
-const textSize = () => {
-  const f = family();
-  const chars = state.text.length || 1;
+function textSize(elObj) {
+  const f = family(elObj);
+  const chars = elObj.text.length || 1;
   return { w: f.w * chars, h: f.h };
-};
-const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
-
-// Misura la larghezza REALE con cui il browser renderizzerebbe il testo,
-// con un dato font/dimensione — serve per calcolare di quanto stirarlo
-// (scaleX) per farlo combaciare esattamente con la larghezza del riquadro,
-// sia a sinistra che a destra.
-const measureCanvas = document.createElement('canvas');
-const measureCtx = measureCanvas.getContext('2d');
-function measureTextWidth(text, fontCss) {
-  measureCtx.font = fontCss;
-  return measureCtx.measureText(text).width;
 }
 
-// navigator.clipboard.writeText richiede un contesto "sicuro" (HTTPS o
-// esattamente "localhost") — se manca, fallisce silenziosamente senza
-// nessun errore visibile. Questo fallback usa un vecchio metodo (una
-// textarea nascosta + execCommand) che funziona quasi ovunque, come
-// riserva quando l'API moderna non è disponibile o fallisce.
 function copyToClipboard(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
   }
   return fallbackCopy(text);
 }
-
 function fallbackCopy(text) {
   const textarea = document.createElement('textarea');
   textarea.value = text;
@@ -274,450 +341,736 @@ function fallbackCopy(text) {
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
-  try {
-    document.execCommand('copy');
-  } catch (err) {
-    console.error('Copia negli appunti fallita:', err);
-  }
+  try { document.execCommand('copy'); } catch (err) { console.error('Copia negli appunti fallita:', err); }
   document.body.removeChild(textarea);
 }
 
-// ============================================================
-// LA PARTE CHE IN REACT ERA "GRATIS": qui la scriviamo a mano.
-// Ogni volta che qualcosa cambia, richiamiamo NOI stessi render()
-// per tenere tutta la UI sincronizzata con lo stato.
-// ============================================================
-function render() {
-  const f = family();
-  const ts = textSize();
+const screenEl = el('screen');
+const domNodes = {};
 
-  // Regola 1: Bold non disponibile per i font 12x16 e 6x10 — la checkbox
-  // resta visibile ma disabilitata (non cliccabile), "Bold" diventa rosso
-  // e barrato, con una nota a sinistra che spiega il motivo.
-  const boldNotAvailable = (f.base === 0 || f.base === 1);
-  el('boldCk').disabled = boldNotAvailable;
-  el('boldDisabledNote').style.display = boldNotAvailable ? 'inline' : 'none';
-  el('boldLabel').style.color = boldNotAvailable ? '#ff6b6b' : '';
-  el('boldLabel').style.textDecoration = boldNotAvailable ? 'line-through' : 'none';
-  if (boldNotAvailable && state.bold) {
-    state.bold = false;
-    el('boldCk').checked = false;
+function ensureDomNode(elObj) {
+  if (domNodes[elObj.id]) return domNodes[elObj.id];
+  let node;
+  if (elObj.type === 'text') {
+    node = document.createElement('div');
+    node.className = 'elText';
+    node.innerHTML = '<span class="elTextInner"></span>';
+  } else {
+    node = document.createElement('img');
+    node.className = 'elIcon';
+    node.src = `imgs/Immagine${elObj.num}.bmp`;
+  }
+  node.dataset.id = elObj.id;
+  node.addEventListener('mousedown', e => startDrag(e, elObj.id));
+  node.addEventListener('touchstart', e => startDrag(e.touches[0], elObj.id, true));
+  screenEl.appendChild(node);
+  domNodes[elObj.id] = node;
+  return node;
+}
+function removeDomNode(id) {
+  if (domNodes[id]) { domNodes[id].remove(); delete domNodes[id]; }
+}
+
+function startDrag(e, id, isTouch) {
+  if (!isTouch) e.preventDefault();
+  selectedId = id;
+  showOutline = true;
+  const elObj = getSelected();
+  const rect = screenEl.getBoundingClientRect();
+  dragOffset.dx = e.clientX - (rect.left + elObj.pos.x * SCALE);
+  dragOffset.dy = e.clientY - (rect.top + elObj.pos.y * SCALE);
+  dragging = true;
+  render();
+}
+window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+window.addEventListener('touchmove', e => { if (dragging && e.touches[0]) moveDrag(e.touches[0].clientX, e.touches[0].clientY); });
+function moveDrag(clientX, clientY) {
+  if (!dragging) return;
+  const elObj = getSelected();
+  if (!elObj) return;
+  const rect = screenEl.getBoundingClientRect();
+  const rawX = (clientX - dragOffset.dx - rect.left) / SCALE;
+  const rawY = (clientY - dragOffset.dy - rect.top) / SCALE;
+  elObj.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
+  render();
+}
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  render();
+});
+window.addEventListener('touchend', () => {
+  dragging = false;
+});
+// Click sullo schermo ma FUORI da qualunque elemento: fa sparire subito il contorno
+screenEl.addEventListener('click', (e) => {
+  if (e.target === screenEl) { showOutline = false; render(); }
+});
+
+function render() {
+  const selEl = getSelected();
+
+  const currentIds = new Set(elements.map(e => e.id));
+  Object.keys(domNodes).forEach(idStr => {
+    const id = Number(idStr);
+    if (!currentIds.has(id)) removeDomNode(id);
+  });
+  elements.forEach(elObj => {
+    const node = ensureDomNode(elObj);
+    node.classList.toggle('elSelected', elObj.id === selectedId && showOutline);
+    if (elObj.type === 'text') {
+      renderTextNode(node, elObj);
+    } else {
+      node.style.left = (elObj.pos.x * SCALE) + 'px';
+      node.style.top = (elObj.pos.y * SCALE) + 'px';
+      node.style.width = (elObj.naturalW * SCALE) + 'px';
+      node.style.height = (elObj.naturalH * SCALE) + 'px';
+    }
+  });
+
+  if (selEl) {
+    const size = selEl.type === 'text' ? textSize(selEl) : { w: selEl.naturalW, h: selEl.naturalH };
+    const label = selEl.type === 'icon' ? `Icona ${iconDisplayValue(1000 + selEl.num)}` : 'Testo';
+    el('activeElementLabel').textContent = label;
+    el('dpadCenterLabel').textContent = label;
+    el('outW').textContent = size.w;
+    el('outH').textContent = size.h;
+    el('outHalfW').textContent = (size.w/2).toFixed(1);
+    el('outHalfH').textContent = (size.h/2).toFixed(1);
+  } else {
+    el('activeElementLabel').textContent = 'nessuno';
+    el('dpadCenterLabel').textContent = 'nessuno';
+    ['outW','outH','outHalfW','outHalfH'].forEach(id => el(id).textContent = '-');
   }
 
-  // Regola 2: "solo per numeri" compare SOLO se il font 4x6 (base 61) è
-  // selezionato E Bold è spuntato — sparisce cambiando font o togliendo Bold.
-  const showNumbersOnlyNote = (f.base === 61 && state.bold);
-  el('numbersOnlyNote').style.display = showNumbersOnlyNote ? 'inline' : 'none';
+  renderControlsPanel(selEl);
+  renderLines();
+}
 
-  // --- testo trascinabile ---
-  const dragEl = el('dragText');
-  const dragInner = el('dragTextInner');
+function renderTextNode(node, t) {
+  const inner = node.querySelector('.elTextInner');
+  const f = family(t);
+  const ts = textSize(t);
   const boxWidthPx = ts.w * SCALE;
   const boxHeightPx = ts.h * SCALE;
-  const fontWeight = state.bold ? '700' : '400';
+  const fontWeight = t.bold ? '700' : '400';
 
-  dragInner.textContent = state.text || ' ';
-  dragEl.style.left = (state.pos.x * SCALE) + 'px';
-  dragEl.style.top = (state.pos.y * SCALE) + 'px';
-  dragEl.style.width = boxWidthPx + 'px';
-  dragEl.style.height = boxHeightPx + 'px';
-  dragEl.style.background = state.transparent ? 'transparent' : state.paperColor;
-  dragInner.style.fontWeight = fontWeight;
-  dragInner.style.fontFamily = 'monospace';
-  dragInner.style.transform = 'none'; // nessuna deformazione
-  dragEl.classList.toggle('dragging', dragging);
+  // Il box CSS ha un padding di 5px per margine visivo di sicurezza —
+  // ma pos.x/pos.y devono restare il punto TOP-LEFT del CONTENUTO vero
+  // (quello che finisce in gcursor), non del bordo esterno del box.
+  // Sposto quindi "left"/"top" indietro di un padding, così il
+  // contenuto (dentro il padding) inizia esattamente a pos.x/pos.y,
+  // mentre il padding si espande simmetricamente intorno a lui.
+  const TEXT_PADDING_PX = 5 / SCALE; // 5px CSS = pixel veri corrispondenti
 
-  // --- icona trascinabile ---
-  const iconEl = el('dragIcon');
-  if (state.icon.visible) {
-    iconEl.style.display = 'block';
-    iconEl.style.left = (state.icon.pos.x * SCALE) + 'px';
-    iconEl.style.top = (state.icon.pos.y * SCALE) + 'px';
-    iconEl.style.width = (state.icon.naturalW * SCALE) + 'px';
-    iconEl.style.height = (state.icon.naturalH * SCALE) + 'px';
-  } else {
-    iconEl.style.display = 'none';
-  }
+  inner.textContent = t.text || ' ';
+  node.style.left = ((t.pos.x - TEXT_PADDING_PX) * SCALE) + 'px';
+  node.style.top = ((t.pos.y - TEXT_PADDING_PX) * SCALE) + 'px';
+  node.style.width = boxWidthPx + 'px';
+  node.style.height = boxHeightPx + 'px';
+  node.style.background = t.transparent ? 'transparent' : t.paperColor;
+  inner.style.color = t.textColor;
+  inner.style.fontWeight = fontWeight;
+  node.classList.toggle('dragging', dragging && selectedId === t.id);
 
   try {
-    // Dimensione derivata dalla LARGHEZZA (non più dall'altezza): stimo
-    // una dimensione di prova, misuro la larghezza reale ottenuta, e
-    // correggo proporzionalmente in un solo passaggio — i font scalano
-    // linearmente, quindi il risultato combacia quasi esattamente con
-    // boxWidthPx, senza bisogno di margini artificiali sottratti prima.
-    const charCountForSpacing = Math.max(0, (state.text || ' ').length - 1);
-    const letterSpacingTotal = charCountForSpacing * 4.5; // deve combaciare col CSS
-    const targetGlyphWidth = Math.max(1, boxWidthPx - letterSpacingTotal);
+    // Niente più stime (canvas, calcoli manuali sul letter-spacing): le
+    // due volte precedenti la stima non ha corrisposto al rendering
+    // vero del browser. Ora cerco la dimensione giusta per tentativi
+    // diretti sul DOM reale — ad ogni passo IMPOSTO una dimensione e
+    // MISURO quanto viene davvero, finché non ci sta esattamente nel
+    // box. Più lento (~20 letture di layout), ma non può sbagliare:
+    // la misura è sempre quella vera, mai una previsione.
+    inner.style.marginLeft = '0';
+    inner.style.marginTop = '0';
 
-    const trialSize = f.h * SCALE * 0.65;
-    measureCtx.font = `${fontWeight} ${trialSize}px monospace`;
-    const trialWidth = measureCtx.measureText(state.text || ' ').width;
-    const fontSize = trialWidth > 0 ? trialSize * (targetGlyphWidth / trialWidth) : trialSize;
+    let low = 1, high = boxHeightPx * 3; // limite alto ragionevole, il testo non sarà mai più alto del triplo del box
+    for (let i = 0; i < 22; i++) {
+      const mid = (low + high) / 2;
+      inner.style.fontSize = mid + 'px';
+      const w = inner.getBoundingClientRect().width;
+      if (w <= boxWidthPx) low = mid; else high = mid;
+    }
+    inner.style.fontSize = low + 'px';
 
-    measureCtx.font = `${fontWeight} ${fontSize}px monospace`;
-    const actualGlyphWidth = measureCtx.measureText(state.text || ' ').width;
-    const actualWidth = actualGlyphWidth + letterSpacingTotal; // larghezza vera, spaziatura inclusa
-
-    dragInner.style.fontSize = fontSize + 'px';
-    // Centro in base alla larghezza reale (glifi + letter-spacing) — il
-    // margine risultante è vicino a zero per costruzione.
-    dragInner.style.marginLeft = Math.max(0, (boxWidthPx - actualWidth) / 2) + 'px';
-    dragInner.style.marginTop = '0';
-    dragInner.style.marginBottom = '0';
+    // Ora che la dimensione è corretta (ci sta davvero nel box, letter-
+    // spacing incluso), uso la misura VERA dal DOM per il centraggio fine
+    // — più precisa di un calcolo manuale, evita l'asimmetria di un pixel.
+    const actualWidth = inner.getBoundingClientRect().width;
+    inner.style.marginLeft = Math.max(0, (boxWidthPx - actualWidth) / 2) + 'px';
   } catch (err) {
-    // Un errore qui NON deve bloccare il resto di render() — in particolare
-    // le righe copiabili più sotto devono ricostruirsi comunque, anche se
-    // l'anteprima del testo restasse imprecisa per qualche caso limite.
     console.error('Errore nel calcolo dimensione testo (il resto continua comunque):', err);
   }
+}
 
-  // --- puntino del gcursor ---
+function renderControlsPanel(selEl) {
+  const isText = selEl && selEl.type === 'text';
 
-  // --- QUESTO è il punto che in React era "automatico":
-  //     mostra/nascondi il selettore colore in base a "transparent".
-  //     Qui dobbiamo ricordarci NOI di farlo, ogni volta. ---
-  el('colorRow').style.visibility = state.transparent ? 'hidden' : 'visible';
+  if (!selEl) return;
 
-  // --- riquadro numeri ---
-  el('outW').textContent = ts.w;
-  el('outH').textContent = ts.h;
+  if (isText) {
+    el('textInput').value = selEl.text;
+    el('fontSelect').value = selEl.familyBase;
+    el('coprenteCk').checked = !selEl.transparent;
+    el('transparentCk').checked = selEl.transparent;
+    el('nonPermCk').checked = !selEl.permanent;
+    el('permCk').checked = selEl.permanent;
+    el('paperColor').value = selEl.paperColor;
+    el('colorSwatch').style.background = selEl.paperColor;
+    el('textColorSwatch').style.background = selEl.textColor;
+    el('textColorInput').value = selEl.textColor;
 
-  // --- le 3 righe di codice copiabili ---
-  const lines = [
-    { key:'icon',    text:`icon ${1000 + (state.icon.num || 1)}` },
-    { key:'icongcursor', text:`gcursor ${state.icon.pos.x},${state.icon.pos.y}` },
-    { key:'font',    text:`font ${fontId()}` },
-    { key:'gcursor', text:`gcursor ${state.pos.x},${state.pos.y}` },
-    { key:'print',   text:`print "${state.text}"` },
-  ];
-  // Le 3 righe esistono già nell'HTML, create una volta sola — qui mi
-  // limito ad AGGIORNARE i loro valori, senza mai ricrearle. Così un
-  // click su di loro (assegnato una volta, fuori da render()) funziona
-  // esattamente come per un bottone fisso.
-  lines.forEach(l => {
-    el(`lineRow-${l.key}`).dataset.text = l.text;
-    const textEl = el(`lineText-${l.key}`);
-    if (l.key === 'icon') {
-      el('lineRow-icon').style.display = state.icon.visible ? 'flex' : 'none';
-      if (document.activeElement !== el('editIcon')) el('editIcon').textContent = 1000 + (state.icon.num || 1);
-    } else if (l.key === 'icongcursor') {
-      el('lineRow-icongcursor').style.display = state.icon.visible ? 'flex' : 'none';
-      if (document.activeElement !== el('editIconX')) el('editIconX').textContent = state.icon.pos.x;
-      if (document.activeElement !== el('editIconY')) el('editIconY').textContent = state.icon.pos.y;
-    } else if (l.key === 'font') {
-      if (document.activeElement !== el('editFont')) el('editFont').textContent = fontId();
-    } else if (l.key === 'gcursor') {
-      // Non sovrascrivo tutto il testo (distruggerebbe editX/editY):
-      // aggiorno solo i due numeri interni, gli span restano gli stessi.
-      // Non aggiorno mentre l'utente sta scrivendo dentro (altrimenti un
-      // render() scattato per un altro motivo interromperebbe la modifica
-      // in corso, cancellando quello che stava digitando).
-      if (document.activeElement !== el('editX')) el('editX').textContent = state.pos.x;
-      if (document.activeElement !== el('editY')) el('editY').textContent = state.pos.y;
-    } else {
-      textEl.textContent = l.text;
+    const boldNotAvailable = (selEl.familyBase === 0 || selEl.familyBase === 1);
+    el('boldCk').disabled = boldNotAvailable;
+    el('boldCk').checked = selEl.bold;
+    el('boldDisabledNote').style.display = boldNotAvailable ? 'inline' : 'none';
+    el('boldLabel').style.color = boldNotAvailable ? '#ff6b6b' : '';
+    el('boldLabel').style.textDecoration = boldNotAvailable ? 'line-through' : 'none';
+    if (boldNotAvailable && selEl.bold) selEl.bold = false;
+
+    const showNumbersOnlyNote = (selEl.familyBase === 61 && selEl.bold);
+    el('numbersOnlyNote').style.display = showNumbersOnlyNote ? 'inline' : 'none';
+  }
+}
+
+const lineNodes = {}; // key: "elementId:campo" -> { wrapper, row, editSpans, hideBtn }
+const linesContainer = el('lines');
+
+function makeEditableSpan(initial) {
+  const span = document.createElement('span');
+  span.contentEditable = 'true';
+  span.spellcheck = false;
+  span.style.cssText = 'display:inline-block;padding:4px 2px;margin:-4px -2px;outline:none;';
+  span.textContent = initial;
+  return span;
+}
+
+// Crea (una volta sola) la struttura DOM di una riga: [testo] [copia] [X opzionale]
+function insertAtRightSpot(node, isIconLine) {
+  if (isIconLine) {
+    // Le righe icona vanno PRIMA della prima riga non-icona già presente
+    // (se ce n'è una) — così un'icona aggiunta dopo un testo finisce
+    // comunque sopra di lui, senza dover mai spostare nulla in seguito.
+    const firstNonIcon = Array.from(linesContainer.children).find(c => c.dataset.iconLine !== '1');
+    if (firstNonIcon) {
+      linesContainer.insertBefore(node, firstNonIcon);
+      return;
     }
-    const isCopied = copiedLineKey === l.key || allJustCopied;
-    textEl.style.color = isCopied ? '#8de3a0' : '#eaf3f3';
-    el(`copyHint-${l.key}`).textContent = isCopied ? 'copiato' : 'copia';
+  }
+  linesContainer.appendChild(node);
+}
+
+function ensureLineRow(key, opts) {
+  if (lineNodes[key]) return lineNodes[key];
+  const wrapper = document.createElement('div');
+  wrapper.className = opts.hideable ? 'lineRowWrapper' : '';
+  const row = document.createElement('div');
+  row.className = 'lineRow';
+  if (opts.isIconLine) { wrapper.dataset.iconLine = '1'; row.dataset.iconLine = '1'; }
+  const lineText = document.createElement('span');
+  lineText.className = 'lineText';
+  const copyHint = document.createElement('span');
+  copyHint.className = 'copyHint';
+  copyHint.textContent = 'copia';
+  row.appendChild(lineText);
+  row.appendChild(copyHint);
+  row.addEventListener('click', () => {
+    copyToClipboard(row.dataset.text || '');
+    row.dataset.justCopied = '1';
+    render();
+    setTimeout(() => { delete row.dataset.justCopied; render(); }, 1200);
+  });
+
+  if (opts.hideable) {
+    wrapper.appendChild(row);
+    const hideBtn = document.createElement('div');
+    hideBtn.className = 'hideLineBtn';
+    hideBtn.textContent = '×';
+    hideBtn.title = opts.deleteWhole ? 'Elimina questo elemento' : 'Nascondi questa riga';
+    hideBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      opts.onHide();
+      render();
+    });
+    wrapper.appendChild(hideBtn);
+    insertAtRightSpot(wrapper, opts.isIconLine);
+    lineNodes[key] = { wrapper, row, lineText, copyHint, hideBtn, deleteWhole: opts.deleteWhole };
+  } else {
+    insertAtRightSpot(row, opts.isIconLine);
+    lineNodes[key] = { wrapper: row, row, lineText, copyHint };
+  }
+  return lineNodes[key];
+}
+
+function removeLineRow(key) {
+  if (lineNodes[key]) { lineNodes[key].wrapper.remove(); delete lineNodes[key]; }
+}
+
+function renderLines() {
+  const neededKeys = new Set();
+
+  elements.forEach(elObj => {
+    if (elObj.type === 'icon') {
+      // --- gcursor dell'icona ---
+      let key = `${elObj.id}:icongcursor`;
+      neededKeys.add(key);
+      const n = ensureLineRow(key, { hideable: true, onHide: () => deleteElementById(elObj.id), deleteWhole: true, isIconLine: true });
+      if (!n.editX) {
+        n.lineText.textContent = '';
+        const prefix = document.createTextNode('gcursor ');
+        n.editX = makeEditableSpan(elObj.pos.x);
+        const comma = document.createTextNode(',');
+        n.editY = makeEditableSpan(elObj.pos.y);
+        n.lineText.appendChild(prefix);
+        n.lineText.appendChild(n.editX);
+        n.lineText.appendChild(comma);
+        n.lineText.appendChild(n.editY);
+        wireEditableNumber(n.editX, SCREEN_W, v => { elObj.pos.x = v; });
+        wireEditableNumber(n.editY, SCREEN_H, v => { elObj.pos.y = v; });
+      }
+      if (document.activeElement !== n.editX) n.editX.textContent = elObj.pos.x;
+      if (document.activeElement !== n.editY) n.editY.textContent = elObj.pos.y;
+      n.row.dataset.text = `gcursor ${elObj.pos.x},${elObj.pos.y}`;
+      applyCopiedStyle(n, key);
+
+      // --- icon N ---
+      key = `${elObj.id}:icon`;
+      neededKeys.add(key);
+      const n2 = ensureLineRow(key, { hideable: true, onHide: () => deleteElementById(elObj.id), deleteWhole: true, isIconLine: true });
+      if (!n2.editIcon) {
+        n2.lineText.textContent = '';
+        n2.lineText.appendChild(document.createTextNode('icon '));
+        n2.editIcon = makeEditableSpan(1000 + elObj.num);
+        n2.lineText.appendChild(n2.editIcon);
+        n2.editIcon.addEventListener('mousedown', e => e.stopPropagation());
+        n2.editIcon.addEventListener('click', e => e.stopPropagation());
+        n2.editIcon.addEventListener('focus', () => {
+          n2.editIcon.textContent = 1000 + elObj.num;
+          document.execCommand('selectAll', false, null);
+        });
+        n2.editIcon.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); n2.editIcon.blur(); }
+          else if (e.key === 'Escape') { e.preventDefault(); render(); n2.editIcon.blur(); }
+        });
+        n2.editIcon.addEventListener('blur', () => {
+          const num = parseInt(n2.editIcon.textContent, 10);
+          const minCode = 1001, maxCode = 1000 + ICON_COUNT;
+          if (!isNaN(num) && num >= minCode && num <= maxCode) {
+            elObj.num = num - 1000;
+            const node = domNodes[elObj.id];
+            if (node) {
+              // Il numero e il file cambiano subito, ma le dimensioni reali
+              // (naturalW/H) le so solo DOPO che la nuova immagine è
+              // effettivamente caricata — altrimenti resterebbero quelle
+              // della vecchia icona, e il box la forzerebbe nelle
+              // proporzioni sbagliate.
+              node.onload = () => {
+                elObj.naturalW = node.naturalWidth || elObj.naturalW;
+                elObj.naturalH = node.naturalHeight || elObj.naturalH;
+                render();
+              };
+              node.src = `imgs/Immagine${elObj.num}.bmp`;
+            }
+          }
+          render();
+        });
+      }
+      if (document.activeElement !== n2.editIcon) n2.editIcon.textContent = iconDisplayValue(1000 + elObj.num);
+      n2.row.dataset.text = `icon ${1000 + elObj.num}`;
+      applyCopiedStyle(n2, key);
+
+    } else {
+      // --- paper (nascondibile) ---
+      if (!elObj.hiddenLines.has('paper')) {
+        const key = `${elObj.id}:paper`;
+        neededKeys.add(key);
+        const n = ensureLineRow(key, { hideable: true, onHide: () => elObj.hiddenLines.add('paper') });
+        n.lineText.textContent = `paper ${colorDisplayValue(elObj.paperColor)}`;
+        n.row.dataset.text = `paper ${colorDisplayValue(elObj.paperColor)}`;
+        applyCopiedStyle(n, key);
+      }
+      // --- color (nascondibile) ---
+      if (!elObj.hiddenLines.has('color')) {
+        const key = `${elObj.id}:color`;
+        neededKeys.add(key);
+        const n = ensureLineRow(key, { hideable: true, onHide: () => elObj.hiddenLines.add('color') });
+        n.lineText.textContent = `color ${colorDisplayValue(elObj.textColor)}`;
+        n.row.dataset.text = `color ${colorDisplayValue(elObj.textColor)}`;
+        applyCopiedStyle(n, key);
+      }
+      // --- font ---
+      let key = `${elObj.id}:font`;
+      neededKeys.add(key);
+      const nf = ensureLineRow(key, { hideable: true, onHide: () => deleteElementById(elObj.id), deleteWhole: true });
+      if (!nf.editFont) {
+        nf.lineText.textContent = '';
+        nf.lineText.appendChild(document.createTextNode('font '));
+        nf.editFont = makeEditableSpan(fontId(elObj));
+        nf.lineText.appendChild(nf.editFont);
+        nf.editFont.addEventListener('mousedown', e => e.stopPropagation());
+        nf.editFont.addEventListener('click', e => e.stopPropagation());
+        nf.editFont.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); nf.editFont.blur(); }
+          else if (e.key === 'Escape') { e.preventDefault(); render(); nf.editFont.blur(); }
+        });
+        nf.editFont.addEventListener('blur', () => {
+          const num = parseInt(nf.editFont.textContent, 10);
+          if (!isNaN(num) && num >= 0 && num <= 172) {
+            const decomposed = decomposeFontId(num);
+            if (decomposed) {
+              elObj.familyBase = decomposed.familyBase;
+              elObj.transparent = decomposed.transparent;
+              elObj.permanent = decomposed.permanent;
+              elObj.bold = decomposed.bold;
+            }
+          }
+          render();
+        });
+      }
+      if (document.activeElement !== nf.editFont) nf.editFont.textContent = fontId(elObj);
+      nf.row.dataset.text = `font ${fontId(elObj)}`;
+      applyCopiedStyle(nf, key);
+
+      // --- gcursor testo ---
+      key = `${elObj.id}:gcursor`;
+      neededKeys.add(key);
+      const ng = ensureLineRow(key, { hideable: true, onHide: () => deleteElementById(elObj.id), deleteWhole: true });
+      if (!ng.editX) {
+        ng.lineText.textContent = '';
+        ng.lineText.appendChild(document.createTextNode('gcursor '));
+        ng.editX = makeEditableSpan(elObj.pos.x);
+        ng.lineText.appendChild(ng.editX);
+        ng.lineText.appendChild(document.createTextNode(','));
+        ng.editY = makeEditableSpan(elObj.pos.y);
+        ng.lineText.appendChild(ng.editY);
+        wireEditableNumber(ng.editX, SCREEN_W, v => { elObj.pos.x = v; });
+        wireEditableNumber(ng.editY, SCREEN_H, v => { elObj.pos.y = v; });
+      }
+      if (document.activeElement !== ng.editX) ng.editX.textContent = elObj.pos.x;
+      if (document.activeElement !== ng.editY) ng.editY.textContent = elObj.pos.y;
+      ng.row.dataset.text = `gcursor ${elObj.pos.x},${elObj.pos.y}`;
+      applyCopiedStyle(ng, key);
+
+      // --- print ---
+      key = `${elObj.id}:print`;
+      neededKeys.add(key);
+      const np = ensureLineRow(key, { hideable: true, onHide: () => deleteElementById(elObj.id), deleteWhole: true });
+      np.lineText.textContent = `print "${elObj.text}"`;
+      np.row.dataset.text = `print "${elObj.text}"`;
+      applyCopiedStyle(np, key);
+    }
+  });
+
+  // Rimuovo le righe di elementi eliminati, o campi nascosti/non più pertinenti
+  Object.keys(lineNodes).forEach(key => {
+    if (!neededKeys.has(key)) removeLineRow(key);
   });
 }
 
-// ============================================================
-// Eventi — qui il conteggio onesto: sono tanti quanti in React,
-// solo che ognuno chiama render() a mano invece che essere
-// "collegato" automaticamente al JSX.
-// ============================================================
-el('textInput').addEventListener('input', e => { state.text = e.target.value; render(); });
-el('fontSelect').addEventListener('change', e => { state.familyBase = Number(e.target.value); render(); });
-el('transparentCk').addEventListener('change', e => { state.transparent = e.target.checked; el('coprenteCk').checked = !e.target.checked; render(); });
-el('coprenteCk').addEventListener('change', e => { state.transparent = !e.target.checked; el('transparentCk').checked = !e.target.checked; render(); });
-el('boldCk').addEventListener('change', e => { state.bold = e.target.checked; render(); });
-el('paperColor').addEventListener('input', e => { state.paperColor = e.target.value; render(); });
+function wireEditableNumber(span, maxVal, onCommit) {
+  span.addEventListener('mousedown', e => e.stopPropagation());
+  span.addEventListener('click', e => e.stopPropagation());
+  span.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); span.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); render(); span.blur(); }
+  });
+  span.addEventListener('blur', () => {
+    const num = parseInt(span.textContent, 10);
+    if (!isNaN(num)) onCommit(clamp(num, maxVal));
+    render();
+  });
+}
+
+function applyCopiedStyle(node, key) {
+  const isCopied = node.row.dataset.justCopied === '1' || allJustCopied;
+  node.lineText.style.color = isCopied ? '#8de3a0' : '#eaf3f3';
+  node.copyHint.textContent = isCopied ? 'copiato' : 'copia';
+
+  // Evidenzio le righe dell'elemento attualmente SELEZIONATO, per
+  // riconoscerle facilmente in mezzo al codice di tutti gli altri.
+  const ownerId = Number(key.split(':')[0]);
+  node.wrapper.classList.toggle('lineOwnerSelected', ownerId === selectedId);
+
+  if (node.deleteWhole && node.hideBtn) {
+    node.hideBtn.style.display = elements.length <= 1 ? 'none' : 'flex';
+  }
+}
+
+el('textInput').addEventListener('input', e => {
+  const s = getSelected();
+  if (s && s.type === 'text') { s.text = e.target.value; render(); }
+});
+el('fontSelect').addEventListener('change', e => {
+  const s = getSelected();
+  if (s && s.type === 'text') { s.familyBase = Number(e.target.value); render(); }
+});
+el('coprenteCk').addEventListener('change', e => {
+  const s = getSelected(); if (!s) return;
+  s.transparent = !e.target.checked; el('transparentCk').checked = !e.target.checked; render();
+});
+el('transparentCk').addEventListener('change', e => {
+  const s = getSelected(); if (!s) return;
+  s.transparent = e.target.checked; el('coprenteCk').checked = !e.target.checked; render();
+});
+el('boldCk').addEventListener('change', e => {
+  const s = getSelected(); if (s) { s.bold = e.target.checked; render(); }
+});
+el('nonPermCk').addEventListener('change', () => {
+  const s = getSelected(); if (!s) return;
+  s.permanent = false; el('permCk').checked = false; render();
+});
+el('permCk').addEventListener('change', () => {
+  const s = getSelected(); if (!s) return;
+  s.permanent = true; el('nonPermCk').checked = false; render();
+});
+el('paperColor').addEventListener('input', e => {
+  const s = getSelected(); if (!s) return;
+  s.paperColor = e.target.value; s.hiddenLines.delete('paper'); render();
+});
+el('textColorInput').addEventListener('input', e => {
+  const s = getSelected(); if (!s) return;
+  s.textColor = e.target.value; s.hiddenLines.delete('color'); render();
+});
+
+function setupColorDropdown(toggleBtnId, arrowId, panelId, colorInputId, onPick) {
+  const panel = el(panelId);
+  PRESET_COLORS.forEach(c => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#eaf3f3; white-space:nowrap;';
+    row.addEventListener('mouseenter', () => row.style.background = '#123840');
+    row.addEventListener('mouseleave', () => row.style.background = 'transparent');
+    const swatch = document.createElement('span');
+    swatch.style.cssText = `display:inline-block; width:14px; height:14px; border-radius:3px; background:${c.hex}; border:1px solid rgba(255,255,255,0.25); flex-shrink:0;`;
+    const label = document.createElement('span');
+    label.textContent = c.name;
+    row.appendChild(swatch); row.appendChild(label);
+    row.addEventListener('click', () => {
+      onPick(c.hex);
+      el(colorInputId).value = c.hex;
+      panel.style.display = 'none';
+      el(arrowId).innerHTML = '&#9660;';
+      render();
+    });
+    panel.appendChild(row);
+  });
+  function showPanel(show) {
+    panel.style.display = show ? 'block' : 'none';
+    el(arrowId).innerHTML = show ? '&#9650;' : '&#9660;';
+  }
+  el(toggleBtnId).addEventListener('click', (e) => { e.stopPropagation(); showPanel(panel.style.display !== 'block'); });
+  document.addEventListener('click', (e) => {
+    if (panel.style.display === 'block' && !panel.contains(e.target) && !el(toggleBtnId).contains(e.target)) showPanel(false);
+  });
+}
+setupColorDropdown('colorToggleBtn', 'colorToggleArrow', 'colorPanel', 'paperColor', hex => {
+  const s = getSelected(); if (s) { s.paperColor = hex; s.hiddenLines.delete('paper'); }
+});
+setupColorDropdown('textColorToggleBtn', 'textColorToggleArrow', 'textColorPanel', 'textColorInput', hex => {
+  const s = getSelected(); if (s) { s.textColor = hex; s.hiddenLines.delete('color'); }
+});
 
 el('bgFileInput').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   const url = URL.createObjectURL(file);
-  const screenEl2 = el('screen');
-  screenEl2.style.backgroundImage = `url(${url})`;
-  screenEl2.style.backgroundSize = 'cover';
-  screenEl2.style.backgroundPosition = 'center';
+  screenEl.style.backgroundImage = `url(${url})`;
+  screenEl.style.backgroundSize = 'cover';
+  screenEl.style.backgroundPosition = 'center';
 });
-
 el('bgResetBtn').addEventListener('click', () => {
-  el('screen').style.backgroundImage = 'none';
+  screenEl.style.backgroundImage = 'none';
   el('bgFileInput').value = '';
 });
 
-// --- Selettore icone Techla (Immagine1.bmp...Immagine214.bmp in public/imgs) ---
-const ICON_COUNT = 214;
-const iconPanel = el('iconPanel');
+el('saveImageBtn').addEventListener('click', () => {
+  const hasBackground = screenEl.style.backgroundImage && screenEl.style.backgroundImage !== 'none';
+  const btn = el('saveImageBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Genero immagine...';
 
-// Popolo la tendina una volta sola: ogni cella mostra l'icona e, sotto,
-// il SUO codice Techla reale (icon 100N), non il numero del file.
+  // #screen ha un colore di sfondo scuro nel CSS (per l'anteprima a schermo,
+  // .panel var(--panel)) — se non c'è un'immagine di sfondo, lo tolgo
+  // TEMPORANEAMENTE prima di catturare, altrimenti html2canvas fotografa
+  // fedelmente quel colore invece di lasciare il PNG davvero trasparente.
+  const originalBg = screenEl.style.backgroundColor;
+  if (!hasBackground) screenEl.style.backgroundColor = 'transparent';
+
+  const correctionScale = SCREEN_W / screenEl.offsetWidth;
+
+  html2canvas(screenEl, {
+    backgroundColor: null,
+    scale: correctionScale,
+    width: screenEl.offsetWidth,
+    height: screenEl.offsetHeight,
+  }).then(canvas => {
+    screenEl.style.backgroundColor = originalBg; // ripristino subito, prima o dopo non cambia nulla per l'utente
+    const format = hasBackground ? 'image/jpeg' : 'image/png';
+    const ext = hasBackground ? 'jpg' : 'png';
+    const dataUrl = canvas.toDataURL(format, 0.92);
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `techla_schermata.${ext}`;
+    a.click();
+    btn.textContent = original;
+  }).catch(err => {
+    screenEl.style.backgroundColor = originalBg;
+    console.error('Errore nella cattura dello schermo:', err);
+    btn.textContent = original;
+  });
+});
+
+el('addTextBtn').addEventListener('click', () => {
+  const newEl = {
+    id: nextId++, type: 'text', text: "Testo", familyBase: 13, transparent: false, permanent: false, bold: false,
+    pos: { x: 100, y: 100 }, paperColor: "#003d4b", textColor: "#ffffff",
+    hiddenLines: new Set(['paper','color']),
+  };
+  elements.push(newEl);
+  selectedId = newEl.id;
+  render();
+});
+
+el('resetTextsBtn').addEventListener('click', () => {
+  // Rimuovo TUTTI i testi, li sostituisco con un unico testo di default —
+  // così non si arriva mai a zero elementi totali, anche se non ci sono icone.
+  elements = elements.filter(e => e.type !== 'text');
+  const defaultText = {
+    id: nextId++, type: 'text', text: "Christopher", familyBase: 13, transparent: false, permanent: false, bold: false,
+    pos: { x: 200, y: 650 }, paperColor: "#003d4b", textColor: "#ffffff",
+    hiddenLines: new Set(['paper','color']),
+  };
+  elements.push(defaultText);
+  selectedId = defaultText.id;
+  render();
+});
+
+el('resetIconsBtn').addEventListener('click', () => {
+  // Rimuovo TUTTE le icone — a differenza del testo, non hanno uno stato
+  // "di default" a cui tornare, semplicemente spariscono.
+  const remaining = elements.filter(e => e.type !== 'icon');
+  if (remaining.length === 0) return; // mai zero elementi totali
+  elements = remaining;
+  if (!elements.find(e => e.id === selectedId)) selectedId = elements[0].id;
+  render();
+});
+
+function deleteElementById(id) {
+  if (elements.length <= 1) return; // non elimino l'ultimo rimasto
+  const idx = elements.findIndex(e => e.id === id);
+  if (idx === -1) return;
+  elements.splice(idx, 1);
+  if (selectedId === id) {
+    selectedId = elements[Math.max(0, idx - 1)].id;
+  }
+  render();
+}
+el('deleteBtn').addEventListener('click', () => deleteElementById(selectedId));
+
+const iconPanel = el('iconPanel');
 for (let n = 1; n <= ICON_COUNT; n++) {
   const techlaCode = 1000 + n;
   const cell = document.createElement('div');
   cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:6px;border-radius:6px;';
   cell.addEventListener('mouseenter', () => cell.style.background = '#123840');
   cell.addEventListener('mouseleave', () => cell.style.background = 'transparent');
-
   const img = document.createElement('img');
   img.src = `imgs/Immagine${n}.bmp`;
   img.alt = String(techlaCode);
   img.style.cssText = 'width:40px;height:40px;object-fit:contain;image-rendering:pixelated;background:#0a1f26;border:1px solid var(--border);border-radius:4px;';
-
   const label = document.createElement('div');
   label.textContent = techlaCode;
   label.style.cssText = 'font-size:11px;color:var(--dim);font-family:monospace;';
-
-  cell.appendChild(img);
-  cell.appendChild(label);
+  cell.appendChild(img); cell.appendChild(label);
   cell.addEventListener('click', () => {
-    // Uso le dimensioni NATURALI vere dell'immagine appena caricata,
-    // così l'icona a schermo ha le proporzioni corrette.
     const naturalW = img.naturalWidth || 40;
     const naturalH = img.naturalHeight || 40;
-
-    // Calcolo il PUNTO MEDIO dell'icona attuale (se ce n'era una), e
-    // riposiziono la nuova icona in modo che il SUO punto medio coincida
-    // con lo stesso punto — così resta "nello stesso posto" visivamente,
-    // ma gcursor (l'angolo) cambia correttamente in base alla nuova
-    // dimensione, invece di restare sempre lo stesso numero.
-    const oldCenterX = state.icon.pos.x + state.icon.naturalW / 2;
-    const oldCenterY = state.icon.pos.y + state.icon.naturalH / 2;
-    const newX = clamp(oldCenterX - naturalW / 2, SCREEN_W);
-    const newY = clamp(oldCenterY - naturalH / 2, SCREEN_H);
-
-    state.icon = {
-      visible: true,
-      num: n,
-      pos: { x: newX, y: newY },
-      naturalW, naturalH,
+    const newEl = {
+      id: nextId++, type: 'icon', num: n,
+      pos: { x: 100, y: 100 }, naturalW, naturalH,
     };
-    el('dragIcon').src = img.src;
+    // Inserisco subito dopo l'ultima icona esistente (o in testa se non
+    // ce n'è nessuna) — così l'array resta "icone prima" per costruzione,
+    // senza dover riordinare il DOM ad ogni render (che disturbava i click).
+    let insertAt = 0;
+    while (insertAt < elements.length && elements[insertAt].type === 'icon') insertAt++;
+    elements.splice(insertAt, 0, newEl);
+    selectedId = newEl.id;
     iconPanel.style.display = 'none';
     el('iconToggleArrow').innerHTML = '&#9660;';
     render();
   });
   iconPanel.appendChild(cell);
 }
-iconPanel.style.display = 'none';
-// il display grid va riapplicato ogni volta che lo si mostra, dato che lo
-// nascondo con display:none (che sovrascriverebbe "grid" se lo lasciassi lì)
 function showIconPanel(show) {
   iconPanel.style.display = show ? 'grid' : 'none';
   el('iconToggleArrow').innerHTML = show ? '&#9650;' : '&#9660;';
 }
-el('iconToggleBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  showIconPanel(iconPanel.style.display !== 'grid');
-});
+el('iconToggleBtn').addEventListener('click', (e) => { e.stopPropagation(); showIconPanel(iconPanel.style.display !== 'grid'); });
 document.addEventListener('click', (e) => {
-  if (iconPanel.style.display === 'grid' && !iconPanel.contains(e.target) && e.target.id !== 'iconToggleBtn') {
-    showIconPanel(false);
-  }
+  if (iconPanel.style.display === 'grid' && !iconPanel.contains(e.target) && e.target.id !== 'iconToggleBtn') showIconPanel(false);
 });
 
-// Trascinamento dell'icona: stessa identica logica del testo, ma su un
-// elemento e uno stato separati (state.icon.pos invece di state.pos).
-const dragIconEl = el('dragIcon');
-dragIconEl.addEventListener('mousedown', e => {
-  e.preventDefault();
-  const rect = screenEl.getBoundingClientRect();
-  iconDragOffset.dx = e.clientX - (rect.left + state.icon.pos.x * SCALE);
-  iconDragOffset.dy = e.clientY - (rect.top + state.icon.pos.y * SCALE);
-  iconDragging = true;
+let moveSteps = { top: 10, bottom: 10, left: 10, right: 10 };
+el('moveTopBtn').addEventListener('click', (e) => {
+  if (e.target.id === 'stepTop') return;
+  const s = getSelected(); if (!s) return;
+  s.pos.y = clamp(s.pos.y + moveSteps.top, SCREEN_H); render();
 });
-dragIconEl.addEventListener('touchstart', e => {
-  const t = e.touches[0];
-  const rect = screenEl.getBoundingClientRect();
-  iconDragOffset.dx = t.clientX - (rect.left + state.icon.pos.x * SCALE);
-  iconDragOffset.dy = t.clientY - (rect.top + state.icon.pos.y * SCALE);
-  iconDragging = true;
+el('moveBottomBtn').addEventListener('click', (e) => {
+  if (e.target.id === 'stepBottom') return;
+  const s = getSelected(); if (!s) return;
+  s.pos.y = clamp(s.pos.y - moveSteps.bottom, SCREEN_H); render();
 });
-window.addEventListener('mousemove', e => {
-  if (!iconDragging) return;
-  const rect = screenEl.getBoundingClientRect();
-  const rawX = (e.clientX - iconDragOffset.dx - rect.left) / SCALE;
-  const rawY = (e.clientY - iconDragOffset.dy - rect.top) / SCALE;
-  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
-  render();
+el('moveRightBtn').addEventListener('click', (e) => {
+  if (e.target.id === 'stepRight') return;
+  const s = getSelected(); if (!s) return;
+  s.pos.x = clamp(s.pos.x - moveSteps.right, SCREEN_W); render();
 });
-window.addEventListener('touchmove', e => {
-  if (!iconDragging) return;
-  const t = e.touches[0];
-  const rect = screenEl.getBoundingClientRect();
-  const rawX = (t.clientX - iconDragOffset.dx - rect.left) / SCALE;
-  const rawY = (t.clientY - iconDragOffset.dy - rect.top) / SCALE;
-  state.icon.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
-  render();
+el('moveLeftBtn').addEventListener('click', (e) => {
+  if (e.target.id === 'stepLeft') return;
+  const s = getSelected(); if (!s) return;
+  s.pos.x = clamp(s.pos.x + moveSteps.left, SCREEN_W); render();
 });
-window.addEventListener('mouseup', () => { iconDragging = false; });
-window.addEventListener('touchend', () => { iconDragging = false; });
-
-
-// Click sulle righe di codice: qui NON serve più la delega, perché le
-// righe non vengono più ricreate — esistono fin dall'inizio, esattamente
-// come i bottoni. Assegno un listener diretto a ciascuna, una volta sola.
-['icon', 'icongcursor', 'font', 'gcursor', 'print'].forEach(key => {
-  el(`lineRow-${key}`).addEventListener('click', () => {
-    const text = el(`lineRow-${key}`).dataset.text;
-    copyToClipboard(text);
-    copiedLineKey = key;
-    render();
-    setTimeout(() => { copiedLineKey = null; render(); }, 1200);
-  });
-});
-
-// Click su X o Y: impedisce che scatti ANCHE la copia dell'intera riga
-// (stopPropagation), permettendo di scrivere direttamente nello span
-// (contenteditable="true" nell'HTML). La modifica si conferma con Invio
-// o uscendo dal campo (blur); Esc annulla e ripristina il valore attuale.
-function commitEdit(spanId, posObj, axis, maxVal) {
+[['stepTop','top'], ['stepBottom','bottom'], ['stepLeft','left'], ['stepRight','right']].forEach(([spanId, dir]) => {
   const span = el(spanId);
-  const num = parseInt(span.textContent, 10);
-  if (!isNaN(num)) {
-    posObj[axis] = clamp(num, maxVal);
-  }
-  render(); // ripristina comunque il testo (corregge input non validi)
-}
-
-[['editX','x','pos'], ['editY','y','pos'], ['editIconX','x','icon'], ['editIconY','y','icon']].forEach(([id, axis, target]) => {
-  const span = el(id);
-  const maxVal = axis === 'x' ? SCREEN_W : SCREEN_H;
-
   span.addEventListener('mousedown', e => e.stopPropagation());
   span.addEventListener('click', e => e.stopPropagation());
-
   span.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      span.blur(); // fa scattare il blur qui sotto, che salva
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      render(); // ripristina il valore attuale, annullando la modifica
-      span.blur();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); span.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); render(); span.blur(); }
   });
-
-  // Risolvo l'oggetto posizione ADESSO, al momento del blur — non
-  // in anticipo — perché state.icon viene riassegnato per intero
-  // quando scegli un'icona dalla tendina (un riferimento catturato
-  // prima punterebbe a un oggetto ormai abbandonato).
   span.addEventListener('blur', () => {
-    const posObj = target === 'pos' ? state.pos : state.icon.pos;
-    commitEdit(id, posObj, axis, maxVal);
+    const num = parseInt(span.textContent, 10);
+    if (!isNaN(num) && num >= 0 && num <= 999) moveSteps[dir] = num;
+    render();
   });
 });
 
-// Stessa logica per il numero di font, con doppia validazione: deve
-// essere 0-172 E corrispondere a una vera combinazione famiglia+
-// trasparente+bold (decomposeFontId). Se non valido, richiamando
-// render() senza aver toccato lo stato, il campo torna a mostrare il
-// numero di prima — che sia calcolato o l'ultimo scritto valido.
-// Stessa logica per il numero dell'icona: 1001-(1000+ICON_COUNT) valido,
-// altrimenti torna al numero precedente. Se valido, ricarico anche
-// l'immagine giusta e ne rimisuro le dimensioni naturali.
-const editIconSpan = el('editIcon');
-editIconSpan.addEventListener('mousedown', e => e.stopPropagation());
-editIconSpan.addEventListener('click', e => e.stopPropagation());
-editIconSpan.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); editIconSpan.blur(); }
-  else if (e.key === 'Escape') { e.preventDefault(); render(); editIconSpan.blur(); }
+el('resetXBtn').addEventListener('click', () => {
+  const s = getSelected(); if (!s) return;
+  const size = s.type === 'text' ? textSize(s) : { w: s.naturalW, h: s.naturalH };
+  s.pos.x = clamp(SCREEN_W/2 - size.w/2, SCREEN_W); render();
 });
-editIconSpan.addEventListener('blur', () => {
-  const num = parseInt(editIconSpan.textContent, 10);
-  const minCode = 1001, maxCode = 1000 + ICON_COUNT;
-  if (!isNaN(num) && num >= minCode && num <= maxCode) {
-    const n = num - 1000;
-    state.icon.num = n;
-    const img = new Image();
-    img.onload = () => {
-      state.icon.naturalW = img.naturalWidth || state.icon.naturalW;
-      state.icon.naturalH = img.naturalHeight || state.icon.naturalH;
-      render();
-    };
-    img.src = `imgs/Immagine${n}.bmp`;
-    el('dragIcon').src = img.src;
-  }
-  // fuori range o non numerico: non tocco lo stato, render() ripristina
-  render();
-});
-
-const editFontSpan = el('editFont');
-editFontSpan.addEventListener('mousedown', e => e.stopPropagation());
-editFontSpan.addEventListener('click', e => e.stopPropagation());
-
-editFontSpan.addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    editFontSpan.blur();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    render();
-    editFontSpan.blur();
-  }
-});
-
-editFontSpan.addEventListener('blur', () => {
-  const num = parseInt(editFontSpan.textContent, 10);
-  if (!isNaN(num) && num >= 0 && num <= 172) {
-    const decomposed = decomposeFontId(num);
-    if (decomposed) {
-      // Aggiorno lo STATO VERO — questo è ciò che fa aggiornare anche
-      // la simulazione a schermo, non solo il numero scritto.
-      state.familyBase = decomposed.familyBase;
-      state.transparent = decomposed.transparent;
-      state.permanent = decomposed.permanent;
-      state.bold = decomposed.bold;
-      // Sincronizzo anche i controlli visivi, così mostrano la stessa scelta.
-      el('fontSelect').value = decomposed.familyBase;
-      el('transparentCk').checked = decomposed.transparent;
-      el('coprenteCk').checked = !decomposed.transparent;
-      el('permCk').checked = decomposed.permanent;
-      el('nonPermCk').checked = !decomposed.permanent;
-      el('boldCk').checked = decomposed.bold;
-    }
-    // se decomposed è null (numero valido ma non corrisponde a nessun
-    // font reale), non tocco lo stato — render() sotto ripristina il
-    // numero precedente, esattamente come per un numero fuori range.
-  }
-  render();
-});
-
-
-const TOOLTIP_TEXT = {
-  permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
-  nonpermanente: "Non permanente: l'elemento non viene ritracciato automaticamente; se la finestra viene coperta e poi riscoperta, quella parte di testo o grafica sparisce (a meno che non venga ridisegnata esplicitamente dal programma).",
-};
-
-el('nonPermCk').addEventListener('change', () => { state.permanent = false; el('permCk').checked = false; render(); });
-el('permCk').addEventListener('change', () => { state.permanent = true; el('nonPermCk').checked = false; render(); });
-
-function showTooltip(key) { el('tooltip').textContent = TOOLTIP_TEXT[key]; el('tooltip').style.display = 'block'; }
-function hideTooltip() { el('tooltip').style.display = 'none'; }
-el('nonPermLabel').addEventListener('mouseenter', () => showTooltip('nonpermanente'));
-el('nonPermLabel').addEventListener('mouseleave', hideTooltip);
-el('permLabel').addEventListener('mouseenter', () => showTooltip('permanente'));
-el('permLabel').addEventListener('mouseleave', hideTooltip);
-
-el('resetHBtn').addEventListener('click', () => {
-  const ts = textSize();
-  state.pos = { ...state.pos, x: clamp(SCREEN_W/2 - ts.w/2, SCREEN_W) };
-  render();
-});
-
-el('resetVBtn').addEventListener('click', () => {
-  const ts = textSize();
-  state.pos = { ...state.pos, y: clamp(SCREEN_H/2 - ts.h/2, SCREEN_H) };
-  render();
+el('resetYBtn').addEventListener('click', () => {
+  const s = getSelected(); if (!s) return;
+  const size = s.type === 'text' ? textSize(s) : { w: s.naturalW, h: s.naturalH };
+  s.pos.y = clamp(SCREEN_H/2 - size.h/2, SCREEN_H); render();
 });
 
 el('copyAllBtn').addEventListener('click', () => {
-  const snippet = `font ${fontId()}\ngcursor ${state.pos.x},${state.pos.y}\nprint "${state.text}"`;
-  copyToClipboard(snippet);
+  const allParts = [];
+  elements.forEach(elObj => {
+    if (elObj.type === 'icon') {
+      allParts.push(`gcursor ${elObj.pos.x},${elObj.pos.y}`);
+      allParts.push(`icon ${1000 + elObj.num}`);
+    } else {
+      if (!elObj.hiddenLines.has('paper')) allParts.push(`paper ${colorDisplayValue(elObj.paperColor)}`);
+      if (!elObj.hiddenLines.has('color')) allParts.push(`color ${colorDisplayValue(elObj.textColor)}`);
+      allParts.push(`font ${fontId(elObj)}`);
+      allParts.push(`gcursor ${elObj.pos.x},${elObj.pos.y}`);
+      allParts.push(`print "${elObj.text}"`);
+    }
+  });
+  copyToClipboard(allParts.join('\n'));
   const btn = el('copyAllBtn');
   const original = btn.textContent;
   btn.textContent = 'Copiato!';
@@ -726,34 +1079,23 @@ el('copyAllBtn').addEventListener('click', () => {
   setTimeout(() => { btn.textContent = original; allJustCopied = false; render(); }, 1200);
 });
 
-// drag: identico nello spirito al tuo /testo esistente
-const screenEl = el('screen');
-el('dragText').addEventListener('mousedown', e => {
-  e.preventDefault();
-  const rect = screenEl.getBoundingClientRect();
-  dragOffset.dx = e.clientX - (rect.left + state.pos.x * SCALE);
-  dragOffset.dy = e.clientY - (rect.top + state.pos.y * SCALE);
-  dragging = true;
-  render();
-});
-window.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  const rect = screenEl.getBoundingClientRect();
-  const rawX = (e.clientX - dragOffset.dx - rect.left) / SCALE;
-  const rawY = (e.clientY - dragOffset.dy - rect.top) / SCALE;
-  state.pos = { x: clamp(rawX, SCREEN_W), y: clamp(rawY, SCREEN_H) };
-  render();
-});
-window.addEventListener('mouseup', () => { dragging = false; render(); });
+const TOOLTIP_TEXT = {
+  permanente: "Permanente: l'elemento viene ritracciato automaticamente dal sistema quando la finestra torna in primo piano dopo essere stata coperta.",
+  nonpermanente: "Non permanente: l'elemento non viene ritracciato automaticamente; se la finestra viene coperta e poi riscoperta, quella parte di testo o grafica sparisce (a meno che non venga ridisegnata esplicitamente dal programma).",
+};
+function showTooltip(key) { el('tooltip').textContent = TOOLTIP_TEXT[key]; el('tooltip').style.display = 'block'; }
+function hideTooltip() { el('tooltip').style.display = 'none'; }
+el('nonPermLabel').addEventListener('mouseenter', () => showTooltip('nonpermanente'));
+el('nonPermLabel').addEventListener('mouseleave', hideTooltip);
+el('permLabel').addEventListener('mouseenter', () => showTooltip('permanente'));
+el('permLabel').addEventListener('mouseleave', hideTooltip);
 
-// init: popola il dropdown una volta sola
 FAMILIES.forEach(f => {
   const opt = document.createElement('option');
   opt.value = f.base;
   opt.textContent = `${f.w}×${f.h}px` + (f.hebrewExcluded ? ' (X)' : '');
   el('fontSelect').appendChild(opt);
 });
-el('fontSelect').value = state.familyBase;
 render();
 </script>
 </body>
