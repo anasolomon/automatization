@@ -323,7 +323,13 @@ function decomposeFontId(num) {
 }
 function textSize(elObj) {
   const f = family(elObj);
-  const chars = elObj.text.length || 1;
+  // Il CSS collassa OGNI sequenza di spazi consecutivi in UNO solo,
+  // ovunque si trovino nel testo (inizio, mezzo, o fine) — non solo
+  // in fondo. Normalizzo allo stesso modo PRIMA di contare, solo per
+  // questa stima della larghezza — il testo vero (con tutti gli spazi
+  // originali) resta invariato per print/copia codice.
+  const normalized = elObj.text.replace(/\s+/g, ' ').trim();
+  const chars = normalized.length || 1;
   return { w: f.w * chars, h: f.h };
 }
 
