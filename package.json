@@ -1,18 +1,16 @@
 {
   "name": "ffmpeg-express-app",
   "version": "1.0.0",
-  "description": "Web app Express.js per convertire video in AVI/MJPEG per Techla, usando ffmpeg via CLI",
+  "description": "Web app Express.js per convertire video/img in AVI/JPG per Techla, usando ffmpeg/magick via CLI",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "ejs": "^6.0.1",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1"
-  },
-  "devDependencies": {
-    "site": "^2.60.4"
   }
 }
